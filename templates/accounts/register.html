@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Create account | StepUp Shoes{% endblock %}
+
+{% block content %}
+<div class="container page auth-page">
+  <div class="auth-card">
+    <h1>Create your account</h1>
+    <p class="muted">Join StepUp Shoes — track orders, save addresses and check out faster.</p>
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="form-grid">
+        {% for field in form %}
+          <div class="form-row {% if field.name == 'email' or field.name == 'phone' %}span-2{% endif %}">
+            <label for="{{ field.id_for_label }}">
+              {{ field.label }}
+              {% if field.field.required %}<span class="req">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+            {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Create account</button>
+    </form>
+
+    <p class="auth-alt">Already have an account? <a class="link" href="{% url 'accounts:login' %}">Log in</a></p>
+  </div>
+</div>
+{% endblock %}

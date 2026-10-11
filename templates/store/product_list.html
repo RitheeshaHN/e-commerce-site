@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{% if current_q %}“{{ current_q }}” — {% endif %}Shoes | StepUp{% endblock %}
+
+{% block content %}
+<div class="container page">
+  <div class="breadcrumb">
+    <a href="{% url 'store:home' %}">Home</a> / <span>Shoes</span>
+  </div>
+
+  <div class="list-layout">
+    <!-- ================= Sidebar filters (collapsible on mobile) ================= -->
+    <aside class="filters" id="filtersPanel">
+      <form method="get" action="{% url 'store:product_list' %}" id="filterForm">
+        {# Keep the search + sort values when applying filters #}
+        {% if current_q %}<input type="hidden" name="q" value="{{ current_q }}">{% endif %}
+        <input type="hidden" name="sort" value="{{ sort }}">
+
+        <div class="filter-group">
+          <h4>Category</h4>
+          <ul class="filter-list">
+            <li>
+              <label><input type="radio" name="category" value="" {% if not current_category %}checked{% endif %}> All</label>
+            </li>
+            {% for cat in categories %}
+              <li>
+                <label>
+                  <input type="radio" name="category" value="{{ cat.slug }}"
+                         {% if current_category == cat.slug %}checked{% endif %}>
+                  {{ cat.name }}
+                </label>
+                {# Sub-categories (Running / Casual / ... under Men, Women, Kids) #}
+                {% if cat.children.all %}
+                  <ul class="filter-sublist">
+                    {% for sub in cat.children.all %}
+                      <li>
+                        <label>
+                          <input type="radio" name="category" value="{{ sub.slug }}"
+                                 {% if current_category == sub.slug %}checked{% endif %}>
+                          {{ sub.name }}
+                        </label>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="filter-group">
+          <h4>Brand</h4>
+          <ul class="filter-list">
+            {% for brand in brands %}
+              <li>
+                <label>
+                  <input type="checkbox" name="brand" value="{{ brand.slug }}"
+                         {% if brand.slug in selected_brands %}checked{% endif %}>
+                  {{ brand.name }}
+                </label>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="filter-group">
+          <h4>Size (UK)</h4>
+          <div class="size-chips">
+            {% for s in sizes %}
+              <label class="size-chip">
+                <input type="radio" name="size" value="{{ s }}"
+                       {% if selected_sizes == s %}checked{% endif %}>
+                <span>{{ s }}</span>
+              </label>
+            {% endfor %}
+            <label class="size-chip">
+              <input type="radio" name="size" value="" {% if not selected_sizes %}checked{% endif %}>
+              <span>Any</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <h4>Price (₹)</h4>
+          <div class="price-inputs">
+            <input type="number" name="min_price" min="0" placeholder="Min"
+                   value="{{ min_price }}" inputmode="numeric">
+            <span>–</span>
+            <input type="number" name="max_price" min="0" placeholder="Max"
+                   value="{{ max_price }}" inputmode="numeric">
+          </div>
+          <div class="quick-prices">
+            <button type="button" class="chip chip-btn" data-min="0" data-max="1500">Under ₹1,500</button>
+            <button type="button" class="chip chip-btn" data-min="1500" data-max="3000">₹1,500–3,000</button>
+            <button type="button" class="chip chip-btn" data-min="3000" data-max="">₹3,000+</button>
+          </div>
+        </div>
+
+        <div class="filter-actions">
+          <button class="btn btn-primary btn-block" type="submit">Apply filters</button>
+          <a class="btn btn-ghost btn-block" href="{% url 'store:product_list' %}">Clear all</a>
+        </div>
+      </form>
+    </aside>
+
+    <!-- ================= Product results ================= -->
+    <section class="results">
+      <div class="results-head">
+        <div>
+          <h1>
+            {% if current_q %}Results for “{{ current_q }}”{% else %}All shoes{% endif %}
+          </h1>
+          <p class="muted">{{ total_results }} product{{ total_results|pluralize }}</p>
+        </div>
+
+        <div class="results-controls">
+          {# Mobile: toggle the filter panel #}
+          <button class="btn btn-ghost filter-toggle" id="filterToggle" type="button">⚙ Filters</button>
+
+          {# Sorting: same as filters but only the `sort` param changes #}
+          <form method="get" action="{% url 'store:product_list' %}" class="sort-form">
+            {% if current_q %}<input type="hidden" name="q" value="{{ current_q }}">{% endif %}
+            {% if current_category %}<input type="hidden" name="category" value="{{ current_category }}">{% endif %}
+            {% for b in selected_brands %}<input type="hidden" name="brand" value="{{ b }}">{% endfor %}
+            {% if selected_sizes %}<input type="hidden" name="size" value="{{ selected_sizes }}">{% endif %}
+            {% if min_price %}<input type="hidden" name="min_price" value="{{ min_price }}">{% endif %}
+            {% if max_price %}<input type="hidden" name="max_price" value="{{ max_price }}">{% endif %}
+            <label for="sortSelect" class="sr-only">Sort by</label>
+            <select name="sort" id="sortSelect" onchange="this.form.submit()">
+              <option value="newest" {% if sort == "newest" %}selected{% endif %}>Newest</option>
+              <option value="popularity" {% if sort == "popularity" %}selected{% endif %}>Popularity</option>
+              <option value="price_asc" {% if sort == "price_asc" %}selected{% endif %}>Price: low to high</option>
+              <option value="price_desc" {% if sort == "price_desc" %}selected{% endif %}>Price: high to low</option>
+              <option value="name" {% if sort == "name" %}selected{% endif %}>Name A–Z</option>
+            </select>
+          </form>
+        </div>
+      </div>
+
+      {% if products %}
+        <div class="product-grid">
+          {% for product in products %}
+            {% include "partials/product_card.html" with product=product %}
+          {% endfor %}
+        </div>
+
+        <!-- ============ Pagination ============ -->
+        {% if is_paginated %}
+          <nav class="pagination" aria-label="Pagination">
+            {% if page_obj.has_previous %}
+              <a class="page-link" href="?{{ base_query }}page={{ page_obj.previous_page_number }}">← Prev</a>
+            {% endif %}
+
+            <span class="page-info">
+              Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+            </span>
+
+            {% if page_obj.has_next %}
+              <a class="page-link" href="?{{ base_query }}page={{ page_obj.next_page_number }}">Next →</a>
+            {% endif %}
+          </nav>
+        {% endif %}
+      {% else %}
+        <div class="empty-state">
+          <span>🕳️</span>
+          <h2>No shoes found</h2>
+          <p>Try removing some filters or searching for something else.</p>
+          <a class="btn btn-primary" href="{% url 'store:product_list' %}">Clear filters</a>
+        </div>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Mobile filter panel toggle
+  const toggle = document.getElementById('filterToggle');
+  const panel  = document.getElementById('filtersPanel');
+  if (toggle && panel) {
+    toggle.addEventListener('click', () => panel.classList.toggle('is-open'));
+  }
+
+  // Quick price buttons fill the min/max inputs then submit
+  document.querySelectorAll('.chip-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById('filterForm');
+      form.querySelector('[name=min_price]').value = btn.dataset.min;
+      form.querySelector('[name=max_price]').value = btn.dataset.max;
+      form.submit();
+    });
+  });
+
+  // Selecting any filter auto-submits for a snappy feel
+  document.querySelectorAll('#filterForm input[type=radio]').forEach(el => {
+    el.addEventListener('change', () => document.getElementById('filterForm').submit());
+  });
+</script>
+{% endblock %}

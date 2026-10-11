@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Payment | StepUp Shoes{% endblock %}
+
+{% block content %}
+<div class="container page auth-page">
+  <div class="auth-card center">
+    <div class="pay-logo">💳</div>
+    <h1>Mock payment gateway</h1>
+    <p class="muted">This is a <strong>simulated</strong> payment step — no real money moves.</p>
+
+    <div class="pay-summary">
+      <div class="pay-row"><span>Order</span><strong>{{ order.order_number }}</strong></div>
+      <div class="pay-row"><span>Amount</span><strong>₹{{ order.total|floatformat:2 }}</strong></div>
+      <div class="pay-row"><span>Status</span>
+        <span class="status status-{{ order.payment_status }}">{{ order.get_payment_status_display }}</span>
+      </div>
+    </div>
+
+    <form method="post" action="{% url 'orders:mock_payment_process' order.order_number %}" class="pay-actions">
+      {% csrf_token %}
+      <button class="btn btn-primary btn-lg btn-block" type="submit" name="action" value="pay">
+        ✅ Pay ₹{{ order.total|floatformat:2 }}
+      </button>
+      <button class="btn btn-ghost btn-block" type="submit" name="action" value="fail">
+        Simulate failed payment
+      </button>
+    </form>
+
+    <p class="muted small">Success marks the order <strong>Confirmed</strong>; failure keeps it Pending so you can retry.</p>
+  </div>
+</div>
+{% endblock %}

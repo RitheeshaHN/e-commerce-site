@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Edit address | StepUp Shoes{% endblock %}
+
+{% block content %}
+<div class="container page auth-page">
+  <div class="auth-card">
+    <h1>Edit address</h1>
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-grid">
+        {% for field in form %}
+          <div class="form-row {% if field.name == 'line1' or field.name == 'line2' %}span-2{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}
+              {% if field.field.required %}<span class="req">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" type="submit">Save changes</button>
+        <a class="btn btn-ghost" href="{% url 'accounts:profile' %}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

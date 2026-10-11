@@ -1,0 +1,8 @@
+{# Reusable star rating display. Expects `rating` (float/int) in context. #}
+<span class="stars" aria-label="{{ rating }} out of 5 stars">
+  {% with full=rating|floatformat:0 %}
+    {% for i in "12345" %}
+      {% if full >= forloop.counter %}★{% else %}☆{% endif %}
+    {% endfor %}
+  {% endwith %}
+</span>

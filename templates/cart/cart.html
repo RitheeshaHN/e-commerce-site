@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Your Cart | StepUp Shoes{% endblock %}
+
+{% block content %}
+<div class="container page">
+  <h1>Your cart 🛒</h1>
+
+  {% if items %}
+    <div class="cart-layout">
+      <!-- ================= Line items ================= -->
+      <section class="cart-items" id="cartItems">
+        {% for item in items %}
+          {# `item.id` = CartItem PK (users) or ProductSize PK (guests) #}
+          <article class="cart-line" data-item-id="{{ item.id }}">
+            <a class="cart-media" href="{{ item.product.get_absolute_url }}">
+              {% with img=item.product.images.all|first %}
+                {% if img %}
+                  <img src="{{ img.image.url }}" alt="{{ item.product.name }}">
+                {% else %}
+                  <div class="img-placeholder">{{ item.product.name }}</div>
+                {% endif %}
+              {% endwith %}
+            </a>
+
+            <div class="cart-info">
+              <span class="brand">{{ item.product.brand.name }}</span>
+              <h3><a href="{{ item.product.get_absolute_url }}">{{ item.product.name }}</a></h3>
+              <p class="muted small">Size: UK {{ item.size.size }}
+                {% if item.size.stock <= 5 %}<span class="low-stock">(only {{ item.size.stock }} left)</span>{% endif %}
+              </p>
+              <p class="line-price">₹<span data-line-price>{{ item.line_total|default:0 }}</span></p>
+            </div>
+
+            <div class="cart-controls">
+              {# Quantity stepper: AJAX update, no page reload #}
+              <div class="qty">
+                <button type="button" class="qty-btn" data-action="dec" aria-label="Decrease">−</button>
+                <input type="number" class="qty-input" value="{{ item.quantity }}"
+                       min="0" max="{{ item.size.stock }}" inputmode="numeric"
+                       aria-label="Quantity for {{ item.product.name }}">
+                <button type="button" class="qty-btn" data-action="inc" aria-label="Increase">+</button>
+              </div>
+              <button type="button" class="link danger" data-action="remove">Remove</button>
+            </div>
+          </article>
+        {% endfor %}
+      </section>
+
+      <!-- ================= Order summary ================= -->
+      <aside class="summary-card" id="orderSummary">
+        <h3>Order summary</h3>
+        <dl>
+          <dt>Subtotal</dt>
+          <dd>₹<span data-summary="subtotal">{{ subtotal|floatformat:2 }}</span></dd>
+          <dt>Shipping</dt>
+          <dd>
+            {% if shipping %}
+              ₹<span data-summary="shipping">{{ shipping|floatformat:2 }}</span>
+            {% else %}
+              <span class="free">FREE</span>
+            {% endif %}
+          </dd>
+          <div class="summary-divider"></div>
+          <dt>Total</dt>
+          <dd class="total">₹<span data-summary="total">{{ total|floatformat:2 }}</span></dd>
+        </dl>
+
+        {% if shipping %}
+          <p class="muted small">
+            Add ₹{{ shipping|floatformat:0 }} more for free shipping 🚚
+          </p>
+        {% else %}
+          <p class="muted small">🎉 You've unlocked free shipping!</p>
+        {% endif %}
+
+        {% if user.is_authenticated %}
+          <a class="btn btn-primary btn-block btn-lg" href="{% url 'orders:checkout' %}">Proceed to checkout →</a>
+        {% else %}
+          <a class="btn btn-primary btn-block btn-lg"
+             href="{% url 'accounts:login' %}?next={% url 'orders:checkout' %}">Login to checkout →</a>
+          <p class="muted small center">You can also check out as a guest after logging in — your cart is kept.</p>
+        {% endif %}
+
+        <a class="btn btn-ghost btn-block" href="{% url 'store:product_list' %}">Continue shopping</a>
+      </aside>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <span>🛒</span>
+      <h2>Your cart is empty</h2>
+      <p>Browse our latest shoes and find your perfect pair.</p>
+      <a class="btn btn-primary" href="{% url 'store:product_list' %}">Start shopping</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

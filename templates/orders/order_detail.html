@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Order {{ order.order_number }} | StepUp Shoes{% endblock %}
+
+{% block content %}
+<div class="container page">
+  <!-- ============ Status banner ============ -->
+  <div class="order-hero">
+    <div>
+      <div class="order-hero-top">
+        <h1>Order {{ order.order_number }}</h1>
+        <span class="status status-{{ order.status|lower }}">{{ order.get_status_display }}</span>
+      </div>
+      <p class="muted">Placed on {{ order.created_at|date:"F j, Y, g:i a" }}</p>
+    </div>
+
+    {% if order.can_cancel %}
+      <form method="post" action="{% url 'orders:order_cancel' order.order_number %}"
+            onsubmit="return confirm('Cancel this order? Stock will be returned.');">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit">Cancel order</button>
+      </form>
+    {% elif order.status == "Cancelled" %}
+      <p class="muted">This order was cancelled.</p>
+    {% else %}
+      <p class="muted small">Need help? Contact support@stepupshoes.example</p>
+    {% endif %}
+  </div>
+
+  <!-- ============ Progress tracker ============ -->
+  {% if order.status != "Cancelled" %}
+    <ol class="tracker">
+      {% for step, label, cls in tracker_steps %}
+        <li class="{{ cls }}">
+          <span class="dot"></span>{{ label }}
+        </li>
+      {% endfor %}
+    </ol>
+  {% endif %}
+
+  <div class="order-layout">
+    <!-- ============ Items ============ -->
+    <section class="panel">
+      <h2>Items ({{ order.item_count }})</h2>
+      <ul class="order-items">
+        {% for item in order.items.all %}
+          <li>
+            <div class="order-item-media">
+              {% with img=item.product.images.all|first %}
+                {% if img %}<img src="{{ img.image.url }}" alt="{{ item.product_name }}">{% endif %}
+              {% endwith %}
+            </div>
+            <div class="order-item-info">
+              <strong><a href="{% url 'store:product_detail' item.product_slug %}">{{ item.product_name }}</a></strong>
+              <p class="muted small">UK {{ item.size_label }} · Qty {{ item.quantity }} · ₹{{ item.unit_price|floatformat:0 }} each</p>
+            </div>
+            <span class="order-item-total">₹{{ item.line_total|floatformat:0 }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+
+      <dl class="totals">
+        <dt>Subtotal</dt><dd>₹{{ order.subtotal|floatformat:2 }}</dd>
+        <dt>Shipping</dt>
+        <dd>{% if order.shipping %}₹{{ order.shipping|floatformat:2 }}{% else %}<span class="free">FREE</span>{% endif %}</dd>
+        <div class="summary-divider"></div>
+        <dt>Total</dt><dd class="total">₹{{ order.total|floatformat:2 }}</dd>
+      </dl>
+    </section>
+
+    <!-- ============ Address + payment ============ -->
+    <aside>
+      <section class="panel">
+        <h3>Shipping to</h3>
+        <p><strong>{{ order.full_name }}</strong></p>
+        <p>{{ order.shipping_address }}</p>
+        <p class="muted">📞 {{ order.phone }}</p>
+        {% if order.note %}<p class="muted small">📝 {{ order.note }}</p>{% endif %}
+      </section>
+
+      <section class="panel">
+        <h3>Payment</h3>
+        <p>{{ order.get_payment_method_display }}</p>
+        <p>
+          Status:
+          <span class="status status-{{ order.payment_status }}">
+            {{ order.get_payment_status_display }}
+          </span>
+        </p>
+
+        {% if order.payment_method == "online" and order.payment_status != "paid" and order.can_cancel %}
+          <a class="btn btn-primary btn-block" href="{% url 'orders:mock_payment' order.order_number %}">
+            {% if order.payment_status == "failed" %}Retry payment{% else %}Pay now{% endif %}
+          </a>
+        {% endif %}
+      </section>
+    </aside>
+  </div>
+
+  <p><a class="link" href="{% url 'orders:order_list' %}">← Back to order history</a></p>
+</div>
+{% endblock %}

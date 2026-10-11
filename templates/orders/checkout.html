@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Checkout | StepUp Shoes{% endblock %}
+
+{% block content %}
+<div class="container page">
+  <div class="breadcrumb">
+    <a href="{% url 'cart:cart_detail' %}">Cart</a> / <span>Checkout</span>
+  </div>
+  <h1>Checkout</h1>
+
+  <div class="checkout-layout">
+    <!-- ================== Shipping + payment form ================== -->
+    <section class="panel">
+      <h2>1. Shipping address</h2>
+
+      {% if saved_addresses %}
+        <div class="saved-addr-row">
+          {% for a in saved_addresses %}
+            <label class="saved-addr {% if forloop.first %}selected{% endif %}">
+              <input type="radio" name="saved-choice" value="{{ a.pk }}"
+                     data-full_name="{{ a.full_name }}" data-phone="{{ a.phone }}"
+                     data-line1="{{ a.line1 }}" data-line2="{{ a.line2 }}"
+                     data-city="{{ a.city }}" data-state="{{ a.state }}"
+                     data-pincode="{{ a.pincode }}"
+                     {% if forloop.first %}checked{% endif %}>
+              <strong>{{ a.full_name }}</strong>
+              <span class="muted small">{{ a.as_single_line }}</span>
+            </label>
+          {% endfor %}
+        </div>
+        <p class="muted small">Or fill in a new address below:</p>
+      {% endif %}
+
+      <form method="post" id="checkoutForm" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-error">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="form-grid">
+          {% for field in form %}
+            {% if field.is_hidden %}
+              {{ field }}
+            {% else %}
+              <div class="form-row {% if field.name == 'address_line1' or field.name == 'address_line2' or field.name == 'note' %}span-2{% endif %}">
+                <label for="{{ field.id_for_label }}">
+                  {{ field.label }}
+                  {% if field.field.required %}<span class="req">*</span>{% endif %}
+                </label>
+                {{ field }}
+                {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <h2 class="mt">2. Payment method</h2>
+        <div class="pay-options">
+          <label class="pay-option">
+            <input type="radio" name="payment_method" value="cod" checked>
+            <span class="pay-icon">💵</span>
+            <span>
+              <strong>Cash on Delivery</strong>
+              <small class="muted">Pay when your order arrives</small>
+            </span>
+          </label>
+          <label class="pay-option">
+            <input type="radio" name="payment_method" value="online">
+            <span class="pay-icon">💳</span>
+            <span>
+              <strong>Online payment</strong>
+              <small class="muted">Mock gateway — no real money moves</small>
+            </span>
+          </label>
+        </div>
+
+        <label class="check-row">
+          {{ form.save_address }}
+          <span>Save this address to my profile</span>
+        </label>
+
+        <button class="btn btn-primary btn-lg btn-block mt" type="submit" id="placeOrderBtn">
+          Place order · ₹{{ total|floatformat:2 }}
+        </button>
+        <p class="muted small center">By placing an order you agree to our terms &amp; conditions.</p>
+      </form>
+    </section>
+
+    <!-- ================== Order summary ================== -->
+    <aside class="summary-card sticky-summary">
+      <h3>Your order</h3>
+      <ul class="mini-cart">
+        {% for item in items %}
+          <li>
+            <span class="mini-name">
+              {{ item.product.name }} <small class="muted">UK {{ item.size.size }} × {{ item.quantity }}</small>
+            </span>
+            <span>₹{{ item.line_total|floatformat:0 }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+      <dl>
+        <dt>Subtotal</dt><dd>₹{{ subtotal|floatformat:2 }}</dd>
+        <dt>Shipping</dt>
+        <dd>{% if shipping %}₹{{ shipping|floatformat:2 }}{% else %}<span class="free">FREE</span>{% endif %}</dd>
+        <div class="summary-divider"></div>
+        <dt>Total</dt><dd class="total">₹{{ total|floatformat:2 }}</dd>
+      </dl>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // ---------- Prefill the form when a saved address is chosen ----------
+  const savedRadios = document.querySelectorAll('input[name=saved-choice]');
+  const form = document.getElementById('checkoutForm');
+  const map = {
+    full_name: 'id_full_name', phone: 'id_phone',
+    address_line1: 'id_address_line1', address_line2: 'id_address_line2',
+    city: 'id_city', state: 'id_state', pincode: 'id_pincode',
+  };
+
+  function fillFromSaved(radio) {
+    for (const [key, id] of Object.entries(map)) {
+      const el = document.getElementById(id);
+      if (el) el.value = radio.dataset[key] || '';
+    }
+    const hidden = document.getElementById('id_saved_address_id');
+    if (hidden) hidden.value = radio.value;
+    document.querySelectorAll('.saved-addr').forEach(c => c.classList.remove('selected'));
+    radio.closest('.saved-addr').classList.add('selected');
+  }
+
+  savedRadios.forEach(r => r.addEventListener('change', () => fillFromSaved(r)));
+  if (savedRadios.length) fillFromSaved(savedRadios[0]);
+
+  // Switching any manual field means the saved address no longer applies.
+  ['id_full_name', 'id_phone', 'id_address_line1', 'id_city', 'id_state', 'id_pincode']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => {
+        const hidden = document.getElementById('id_saved_address_id');
+        if (hidden) hidden.value = '';
+        document.querySelectorAll('.saved-addr').forEach(c => c.classList.remove('selected'));
+      });
+    });
+
+  // ---------- Client-side validation (server validates again) ----------
+  form.addEventListener('submit', (e) => {
+    const errors = [];
+    const val = id => (document.getElementById(id)?.value || '').trim();
+
+    if (val('id_full_name').length < 3) errors.push('full name');
+    if (!/^\d{10,}$/.test(val('id_phone').replace(/\D/g, ''))) errors.push('valid phone');
+    if (!val('id_address_line1')) errors.push('address line 1');
+    if (!val('id_city')) errors.push('city');
+    if (!val('id_state')) errors.push('state');
+    if (!/^\d{6}$/.test(val('id_pincode'))) errors.push('6-digit PIN code');
+
+    if (errors.length) {
+      e.preventDefault();
+      alert('Please check: ' + errors.join(', '));
+      document.getElementById('placeOrderBtn').disabled = false;
+      document.getElementById('placeOrderBtn').textContent = 'Place order';
+    }
+  });
+</script>
+{% endblock %}

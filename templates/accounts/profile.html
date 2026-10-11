@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}My profile | StepUp Shoes{% endblock %}
+
+{% block content %}
+<div class="container page">
+  <h1>My profile</h1>
+
+  <div class="profile-layout">
+    <!-- ============ Personal info ============ -->
+    <section class="panel">
+      <h2>Personal information</h2>
+      <form method="post">
+        {% csrf_token %}
+        <div class="form-grid">
+          {% for field in form %}
+            <div class="form-row {% if field.name == 'email' or field.name == 'phone' %}span-2{% endif %}">
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+        <button class="btn btn-primary" type="submit">Save changes</button>
+      </form>
+
+      <hr>
+      <div class="stats-row">
+        <div><strong>{{ orders_count }}</strong><span>Orders</span></div>
+        <div><strong>{{ addresses|length }}</strong><span>Saved addresses</span></div>
+        <div><strong>{{ user.date_joined|date:"M Y" }}</strong><span>Member since</span></div>
+      </div>
+      <p><a class="link" href="{% url 'orders:order_list' %}">View order history →</a></p>
+    </section>
+
+    <!-- ============ Saved addresses ============ -->
+    <section class="panel">
+      <div class="section-head">
+        <h2>Saved addresses</h2>
+        <button class="btn btn-ghost" type="button" id="addAddrBtn">+ Add address</button>
+      </div>
+
+      {% for addr in addresses %}
+        <div class="addr-card">
+          <div class="addr-head">
+            <strong>{{ addr.full_name }}</strong>
+            <span class="chip">{{ addr.get_address_type_display }}</span>
+            {% if addr.is_default %}<span class="chip chip-default">Default</span>{% endif %}
+          </div>
+          <p>{{ addr.as_single_line }}</p>
+          <p class="muted small">📞 {{ addr.phone }}</p>
+          <div class="addr-actions">
+            <a class="link" href="{% url 'accounts:address_edit' addr.pk %}">Edit</a>
+            <form method="post" action="{% url 'accounts:address_delete' addr.pk %}"
+                  onsubmit="return confirm('Delete this address?');">
+              {% csrf_token %}
+              <button class="link danger" type="submit">Delete</button>
+            </form>
+          </div>
+        </div>
+      {% empty %}
+        <p class="muted">No saved addresses yet.</p>
+      {% endfor %}
+    </section>
+  </div>
+</div>
+
+<!-- ============ Add address modal ============ -->
+<div class="modal" id="addrModal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="addrTitle">
+    <button class="modal-close" id="addrModalClose" aria-label="Close">×</button>
+    <h3 id="addrTitle">Add address</h3>
+    <form method="post" action="{% url 'accounts:address_add' %}">
+      {% csrf_token %}
+      <div class="form-grid">
+        {% for field in addr_form %}
+          <div class="form-row {% if field.name == 'line1' or field.name == 'line2' %}span-2{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}
+              {% if field.field.required %}<span class="req">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      <button class="btn btn-primary btn-block" type="submit">Save address</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const modal = document.getElementById('addrModal');
+  document.getElementById('addAddrBtn').addEventListener('click', () => modal.hidden = false);
+  document.getElementById('addrModalClose').addEventListener('click', () => modal.hidden = true);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+</script>
+{% endblock %}

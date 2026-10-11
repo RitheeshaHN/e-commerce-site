@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}My orders | StepUp Shoes{% endblock %}
+
+{% block content %}
+<div class="container page">
+  <h1>My orders</h1>
+
+  {% if orders %}
+    <div class="order-list">
+      {% for order in orders %}
+        <a class="order-card" href="{% url 'orders:order_detail' order.order_number %}">
+          <div class="order-card-head">
+            <strong>{{ order.order_number }}</strong>
+            <span class="status status-{{ order.status|lower }}">{{ order.get_status_display }}</span>
+          </div>
+          <p class="muted small">{{ order.created_at|date:"M j, Y" }} · {{ order.item_count }} item{{ order.item_count|pluralize }}</p>
+          <div class="order-card-foot">
+            <span class="order-thumbs">
+              {% for item in order.items.all|slice:":3" %}
+                {% with img=item.product.images.all|first %}
+                  {% if img %}<img src="{{ img.image.url }}" alt="{{ item.product_name }}">{% endif %}
+                {% endwith %}
+              {% endfor %}
+            </span>
+            <span class="price">₹{{ order.total|floatformat:0 }}</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <span>📦</span>
+      <h2>No orders yet</h2>
+      <p>When you place an order, it will show up here.</p>
+      <a class="btn btn-primary" href="{% url 'store:product_list' %}">Start shopping</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

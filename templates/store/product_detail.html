@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ product.brand.name }} {{ product.name }} | StepUp Shoes{% endblock %}
+
+{% block content %}
+<div class="container page">
+  <div class="breadcrumb">
+    <a href="{% url 'store:home' %}">Home</a> /
+    <a href="{% url 'store:product_list' %}?category={{ product.category.slug }}">{{ product.category.full_name }}</a> /
+    <span>{{ product.name }}</span>
+  </div>
+
+  <div class="detail-layout">
+    <!-- =================== Gallery =================== -->
+    <section class="gallery">
+      <div class="gallery-main">
+        {% if images %}
+          <img id="mainImage"
+               src="{{ images.0.image.url }}"
+               alt="{{ images.0.alt_text|default:product.name }}">
+        {% else %}
+          <div class="img-placeholder img-placeholder-lg">{{ product.name }}</div>
+        {% endif %}
+        {% if product.has_discount %}
+          <span class="badge badge-sale">-{{ product.discount_percent }}%</span>
+        {% endif %}
+      </div>
+
+      {% if images|length > 1 %}
+        <div class="gallery-thumbs">
+          {% for img in images %}
+            <button type="button" class="thumb {% if forloop.first %}active{% endif %}"
+                    data-src="{{ img.image.url }}">
+              <img src="{{ img.image.url }}" alt="View {{ product.name }} image {{ forloop.counter }}">
+            </button>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- =================== Info + buy box =================== -->
+    <section class="detail-info">
+      <span class="brand">{{ product.brand.name }}</span>
+      <h1>{{ product.name }}</h1>
+
+      <div class="rating-row">
+        {% with rating=product.average_rating %}
+          <span class="stars" aria-label="{{ rating }} out of 5">
+            {% for i in "12345" %}{% if rating >= forloop.counter %}★{% else %}☆{% endif %}{% endfor %}
+          </span>
+        {% endwith %}
+        <a href="#reviews" class="link">{{ product.review_count }} review{{ product.review_count|pluralize }}</a>
+        {% if product.colour %}<span class="muted">· {{ product.colour }}</span>{% endif %}
+      </div>
+
+      <div class="price-box">
+        <span class="price price-lg">₹{{ product.final_price|floatformat:0 }}</span>
+        {% if product.has_discount %}
+          <s class="old-price">₹{{ product.price|floatformat:0 }}</s>
+          <span class="badge badge-sale">Save {{ product.discount_percent }}%</span>
+        {% endif %}
+      </div>
+      <p class="muted small">Inclusive of all taxes</p>
+
+      {% if product.material %}
+        <p class="material"><strong>Material:</strong> {{ product.material }}</p>
+      {% endif %}
+      <p class="description">{{ product.description }}</p>
+
+      <!-- ============ Colour options (links that filter the list) ============ -->
+      {% if product.colour_list %}
+        <div class="option-block">
+          <h4>Colour{% if product.colour %}: <span>{{ product.colour }}</span>{% endif %}</h4>
+          <div class="colour-chips">
+            {% for c in product.colour_list %}
+              <a class="chip" href="{% url 'store:product_list' %}?q={{ c|urlencode }}">{{ c }}</a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- ============ Size selector with per-size stock ============ -->
+      <form id="addToCartForm" method="post"
+            action="{% url 'cart:cart_add' 0 %}"
+            data-cart-add-url="{% url 'cart:cart_add' 999999 %}"
+            data-guest="{% if user.is_authenticated %}0{% else %}1{% endif %}">
+        {% csrf_token %}
+
+        <div class="option-block">
+          <div class="option-head">
+            <h4>Select size (UK)</h4>
+            <button type="button" class="link" id="sizeGuideBtn">📏 Size guide</button>
+          </div>
+
+          <div class="size-grid" id="sizeGrid">
+            {% for s in sizes %}
+              <label class="size-opt {% if s.stock == 0 %}disabled{% endif %}"
+                     title="{% if s.stock > 0 %}{{ s.stock }} in stock{% else %}Out of stock{% endif %}">
+                <input type="radio" name="size" value="{{ s.pk }}" data-size="{{ s.size }}"
+                       data-stock="{{ s.stock }}"
+                       {% if s.stock == 0 %}disabled{% endif %}>
+                <span>{{ s.size }}</span>
+                {% if s.stock > 0 and s.stock <= 3 %}
+                  <small>Only {{ s.stock }} left</small>
+                {% endif %}
+              </label>
+            {% empty %}
+              <p class="muted">No sizes available.</p>
+            {% endfor %}
+          </div>
+          <p class="field-error" id="sizeError" hidden>Please select a size.</p>
+          <p class="muted small" id="stockHint"></p>
+        </div>
+
+        <!-- ============ Quantity + Add to cart ============ -->
+        <div class="buy-row">
+          <div class="qty">
+            <button type="button" class="qty-btn" data-qty="-1" aria-label="Decrease quantity">−</button>
+            <input type="number" id="qtyInput" name="quantity" value="1" min="1" max="10" inputmode="numeric">
+            <button type="button" class="qty-btn" data-qty="1" aria-label="Increase quantity">+</button>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg" id="addToCartBtn">
+            Add to cart 🛒
+          </button>
+        </div>
+      </form>
+
+      <ul class="trust-list">
+        <li>🚚 Free shipping over ₹1,999</li>
+        <li>↩️ 7-day returns</li>
+        <li>💳 Cash on delivery available</li>
+      </ul>
+    </section>
+  </div>
+
+  <!-- =================== Reviews =================== -->
+  <section class="section reviews" id="reviews">
+    <div class="section-head"><h2>Customer reviews</h2></div>
+
+    <div class="reviews-layout">
+      <!-- Summary -->
+      <div class="review-summary">
+        <div class="big-rating">{{ product.average_rating }}</div>
+        {% with rating=product.average_rating %}
+          <span class="stars stars-lg">
+            {% for i in "12345" %}{% if rating >= forloop.counter %}★{% else %}☆{% endif %}{% endfor %}
+          </span>
+        {% endwith %}
+        <p class="muted">{{ product.review_count }} review{{ product.review_count|pluralize }}</p>
+
+        {# Rating distribution bars (widths precomputed in the view) #}
+        {% for row in rating_rows %}
+          <div class="rating-bar">
+            <span>{{ row.stars }}★</span>
+            <div class="bar"><i style="width: {{ row.pct }}%"></i></div>
+            <span class="muted">{{ row.count }}</span>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Review list -->
+      <div class="review-list">
+        {% for review in reviews %}
+          <article class="review">
+            <div class="review-head">
+              <strong>{{ review.user.first_name|default:review.user.username }}</strong>
+              <span class="stars">{% for i in "12345" %}{% if review.rating >= forloop.counter %}★{% else %}☆{% endif %}{% endfor %}</span>
+              <time class="muted small">{{ review.created_at|date:"M j, Y" }}</time>
+            </div>
+            {% if review.title %}<h4>{{ review.title }}</h4>{% endif %}
+            <p>{{ review.comment }}</p>
+          </article>
+        {% empty %}
+          <p class="muted">No reviews yet — be the first to share your thoughts!</p>
+        {% endfor %}
+
+        <!-- Write a review -->
+        {% if can_review and not already_reviewed %}
+          <form method="post" action="{% url 'store:post_review' product.slug %}" class="review-form">
+            {% csrf_token %}
+            <h3>Write a review</h3>
+            {% if review_form.non_field_errors %}
+              <p class="field-error">{{ review_form.non_field_errors }}</p>
+            {% endif %}
+            <div class="form-row">
+              <label>Rating
+                {{ review_form.rating }}
+              </label>
+              {% if review_form.rating.errors %}<p class="field-error">{{ review_form.rating.errors }}</p>{% endif %}
+            </div>
+            <div class="form-row">
+              <label>Title {{ review_form.title }}</label>
+              {% if review_form.title.errors %}<p class="field-error">{{ review_form.title.errors }}</p>{% endif %}
+            </div>
+            <div class="form-row">
+              <label>Your review {{ review_form.comment }}</label>
+              {% if review_form.comment.errors %}<p class="field-error">{{ review_form.comment.errors }}</p>{% endif %}
+            </div>
+            <button class="btn btn-primary" type="submit">Post review</button>
+          </form>
+        {% elif already_reviewed %}
+          <p class="muted">You have already reviewed this product. Thanks! 🙌</p>
+        {% else %}
+          <p class="muted"><a class="link" href="{% url 'accounts:login' %}?next={{ request.path }}">Log in</a> to write a review.</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== Related products =================== -->
+  {% if related %}
+  <section class="section">
+    <div class="section-head"><h2>You may also like</h2></div>
+    <div class="product-grid">
+      {% for product in related %}
+        {% include "partials/product_card.html" with product=product %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+
+<!-- =================== Size guide modal =================== -->
+<div class="modal" id="sizeModal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="sizeModalTitle">
+    <button class="modal-close" id="sizeModalClose" aria-label="Close">×</button>
+    <h3 id="sizeModalTitle">📐 Size guide (foot length)</h3>
+    <p class="muted">Measure your foot from heel to toe and match the length below.</p>
+    <table class="size-table">
+      <thead><tr><th>UK</th><th>EU</th><th>Foot length (cm)</th></tr></thead>
+      <tbody>
+        {% for uk, eu, cm in size_chart %}
+          <tr><td>{{ uk }}</td><td>{{ eu }}</td><td>{{ cm }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // ---------- Gallery: click a thumbnail to swap the main image ----------
+  document.querySelectorAll('.thumb').forEach(t => {
+    t.addEventListener('click', () => {
+      document.getElementById('mainImage').src = t.dataset.src;
+      document.querySelectorAll('.thumb').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+
+  // ---------- Quantity stepper ----------
+  const qtyInput = document.getElementById('qtyInput');
+  document.querySelectorAll('.qty-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      let v = parseInt(qtyInput.value, 10) || 1;
+      v = Math.min(10, Math.max(1, v + parseInt(b.dataset.qty, 10)));
+      qtyInput.value = v;
+    });
+  });
+
+  // ---------- Size selection: stock hint + validation ----------
+  const sizeError = document.getElementById('sizeError');
+  const stockHint = document.getElementById('stockHint');
+  const addBtn    = document.getElementById('addToCartBtn');
+
+  document.querySelectorAll('#sizeGrid input[name=size]').forEach(r => {
+    r.addEventListener('change', () => {
+      sizeError.hidden = true;
+      const stock = parseInt(r.dataset.stock, 10);
+      stockHint.textContent = `UK ${r.dataset.size} selected — ${stock} in stock`;
+      qtyInput.max = Math.min(10, stock);
+      if (parseInt(qtyInput.value, 10) > stock) qtyInput.value = stock;
+      addBtn.disabled = false;
+    });
+  });
+
+  // ---------- Add to cart (AJAX, no page reload) ----------
+  const form = document.getElementById('addToCartForm');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const selected = form.querySelector('input[name=size]:checked');
+    if (!selected) {
+      sizeError.hidden = false;
+      document.getElementById('sizeGrid').classList.add('shake');
+      setTimeout(() => document.getElementById('sizeGrid').classList.remove('shake'), 400);
+      return;
+    }
+    const url = `/cart/add/${selected.value}/`;
+    addBtn.disabled = true;
+    addBtn.textContent = 'Adding…';
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          quantity: parseInt(qtyInput.value, 10) || 1,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        updateCartBadge(data.count);
+        showToast('✅ ' + data.message, 'success');
+      } else {
+        showToast('⚠️ ' + data.message, 'warning');
+      }
+    } catch (err) {
+      showToast('Could not reach the server. Please try again.', 'error');
+    } finally {
+      addBtn.disabled = false;
+      addBtn.textContent = 'Add to cart 🛒';
+    }
+  });
+
+  // ---------- Size guide modal ----------
+  const modal = document.getElementById('sizeModal');
+  document.getElementById('sizeGuideBtn').addEventListener('click', () => modal.hidden = false);
+  document.getElementById('sizeModalClose').addEventListener('click', () => modal.hidden = true);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+</script>
+{% endblock %}
