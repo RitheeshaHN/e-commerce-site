@@ -149,7 +149,11 @@ def home(request):
         .prefetch_related("images", "sizes")[:4]
     )
     audience_cats = Category.objects.filter(kind="audience", is_active=True)
-    type_cats = Category.objects.filter(kind="type", is_active=True)
+    # Only top-level types for the chip row: "Running/Casual/Formal/Sports"
+    # once each (sub-categories like Men/Casual repeat the same name).
+    type_cats = Category.objects.filter(
+        kind="type", is_active=True, parent__isnull=True
+    )
 
     context = {
         "featured": featured,
