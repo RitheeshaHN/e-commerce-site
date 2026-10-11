@@ -1,5 +1,5 @@
 /* =========================================================================
-   StepUp Shoes — mobile-first stylesheet
+   StepUp Footwear — mobile-first stylesheet
    Breakpoints: base = phone, 640px = large phone/small tablet,
                 960px = tablet/desktop, 1200px = wide
    ========================================================================= */
@@ -109,8 +109,34 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 1.5rem 0; }
   padding-block: .5rem; order: 5;
 }
 .nav-links.open { display: flex; }
-.nav-links a { padding: .6rem .4rem; border-radius: 8px; font-weight: 600; }
-.nav-links a:hover { background: var(--bg-soft); }
+.nav-links a, .nav-links .nav-link {
+  padding: .6rem .4rem; border-radius: 8px; font-weight: 600;
+  background: none; border: 0; font-size: 1rem; color: inherit;
+  text-align: left; cursor: pointer; font-family: inherit;
+}
+.nav-links a:hover, .nav-links .nav-link:hover { background: var(--bg-soft); }
+.nav-sale { color: var(--danger); }
+
+/* --------------------------- Categories mega-menu ------------------------ */
+.nav-item.has-mega { position: relative; }
+.mega-trigger .caret { font-size: .7rem; }
+.mega-menu {
+  display: none;
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); padding: 1rem; margin-top: .35rem;
+  z-index: 70;
+}
+/* The `hidden` attribute is what actually toggles it (JS + no-JS safe). */
+.mega-menu:not([hidden]) { display: block; }
+.mega-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .25rem 1.25rem; }
+.mega-col { display: flex; flex-direction: column; }
+.mega-col a { padding: .3rem .4rem; font-size: .9rem; border-radius: 6px; white-space: nowrap; }
+.mega-head { font-weight: 800; margin-top: .4rem; }
+.mega-head span { margin-right: .35rem; }
+.mega-col a:not(.mega-head) { color: var(--ink-soft); }
+
+/* "Footwear" is hidden next to the logo on small screens to save space */
+.logo-sub { display: none; }
 
 .nav-search {
   position: relative; display: flex; order: 4; width: 100%; gap: .4rem;
@@ -387,7 +413,20 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 1.5rem 0; }
   background: repeating-linear-gradient(45deg, #fff, #fff 6px, var(--bg-soft) 6px, var(--bg-soft) 12px);
 }
 .size-grid.shake { animation: shake .4s; }
+.shake { animation: shake .4s; }
 @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+/* --------- Size trigger button (opens the size list dialog/sheet) --------- */
+.size-trigger {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; padding: .8rem 1rem; background: #fff; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 12px;
+  font: inherit; font-weight: 700; font-size: .98rem; color: var(--ink-soft);
+}
+.size-trigger:hover, .size-trigger:focus-visible { border-color: var(--ink); }
+.size-trigger.is-selected { color: var(--ink); border-color: var(--ink); }
+.size-trigger:disabled { opacity: .5; cursor: not-allowed; }
+.size-trigger-caret { color: var(--ink-soft); font-size: .8rem; }
 
 .buy-row { display: flex; gap: .75rem; align-items: stretch; flex-wrap: wrap; }
 .qty {
@@ -657,6 +696,49 @@ input[type="search"], select, textarea {
 }
 .size-table th { background: var(--bg-soft); font-weight: 800; }
 
+/* =========================================================================
+   Sheet — a dialog that is a bottom sheet on phones and a centred dialog
+   on larger screens. Used by the size picker and the size guide.
+   Both have a visible ✕, close on Esc and on outside clicks.
+   ========================================================================= */
+html.no-scroll, html.no-scroll body { overflow: hidden; }
+
+.sheet { position: fixed; inset: 0; z-index: 95; display: flex; align-items: flex-end; }
+.sheet[hidden] { display: none; }
+.sheet-bd { position: absolute; inset: 0; background: rgba(15, 17, 21, .55); }
+.sheet-panel {
+  position: relative; z-index: 1; display: flex; flex-direction: column;
+  width: 100%; max-height: 88vh; background: #fff;
+  border-radius: 18px 18px 0 0;               /* bottom-sheet shape on mobile */
+  box-shadow: var(--shadow-lg);
+  animation: sheetUp .22s ease;
+}
+@keyframes sheetUp { from { transform: translateY(100%); } }
+
+.sheet-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; padding: .9rem 1.1rem .6rem; border-bottom: 1px solid var(--line);
+}
+.sheet-head h3 { margin: 0; font-size: 1.05rem; }
+/* The little drag handle only makes sense on the mobile bottom sheet */
+.sheet-grip {
+  display: block; width: 44px; height: 4px; border-radius: 999px;
+  background: var(--line); margin: 0 auto .5rem;
+}
+.sheet-close {
+  border: 0; background: none; font-size: 1.8rem; line-height: 1; cursor: pointer;
+  color: var(--ink-soft); padding: 0 .2rem;
+}
+.sheet-close:hover { color: var(--ink); }
+.sheet-body { padding: 1rem 1.1rem; overflow: auto; }
+.sheet-foot {
+  display: flex; gap: .75rem; padding: .8rem 1.1rem calc(.8rem + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line); background: #fff; border-radius: 0 0 18px 18px;
+}
+.sheet-foot .btn { flex: 1; }
+.sheet-foot-end { justify-content: flex-end; }
+.sheet-foot-end .btn { flex: 0 0 auto; min-width: 120px; }
+
 /* ------------------------------- Footer -------------------------------- */
 .footer { background: #14161a; color: #c9cede; margin-top: 3rem; }
 .footer-grid { display: grid; gap: 1.5rem; padding-block: 2.5rem 1.5rem; grid-template-columns: 1fr; }
@@ -674,6 +756,7 @@ input[type="search"], select, textarea {
    ========================================================================= */
 @media (min-width: 640px) {
   .hide-mobile { display: inline-block; }
+  .logo-sub { display: inline; }
   .product-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   .cart-line { grid-template-columns: 110px 1fr auto; align-items: center; }
   .cart-controls { grid-column: auto; flex-direction: column; align-items: flex-end; }
@@ -681,12 +764,26 @@ input[type="search"], select, textarea {
   .span-2 { grid-column: 1 / -1; }
   .reviews-layout { grid-template-columns: 260px 1fr; }
   .order-list { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+
+  /* Bigger screens: dialogs are centred instead of a bottom sheet */
+  .sheet { align-items: center; justify-content: center; padding: 1rem; }
+  .sheet-panel { width: min(460px, 100%); border-radius: var(--radius-lg); animation: pop .18s ease; }
+  .sheet-foot { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+  .sheet-grip { display: none; }
 }
 
 @media (min-width: 960px) {
   .nav-toggle { display: none; }
-  .nav-links { display: flex; width: auto; flex-direction: row; order: 0; padding: 0; gap: .25rem; }
+  .nav-links { display: flex; width: auto; flex-direction: row; align-items: center; order: 0; padding: 0; gap: .25rem; }
+  .nav-links a, .nav-links .nav-link { padding: .45rem .6rem; white-space: nowrap; }
   .nav-search { order: 0; width: auto; flex: 1; max-width: 380px; margin-inline: auto; }
+
+  /* Mega-menu drops down from the navbar and spans a wide panel */
+  .mega-menu {
+    position: absolute; top: calc(100% + .4rem); left: 50%;
+    transform: translateX(-50%); width: max-content; max-width: min(920px, 92vw);
+  }
+  .mega-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: .1rem 1.75rem; }
 
   .hero-inner { grid-template-columns: 1.15fr .85fr; padding-block: 4.5rem; }
   .list-layout { grid-template-columns: 250px 1fr; align-items: start; }

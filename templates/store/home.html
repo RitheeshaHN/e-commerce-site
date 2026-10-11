@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}StepUp Shoes — Every step, elevated{% endblock %}
+{% block title %}StepUp Footwear — Every step, elevated{% endblock %}
 
 {% block content %}
 <!-- ============ Hero ============ -->
@@ -9,10 +9,10 @@
     <div class="hero-text">
       <span class="eyebrow">New season · 2026</span>
       <h1>Every step,<br><em>elevated.</em></h1>
-      <p>Running, casual, formal and sports shoes for the whole family — from brands you trust.</p>
+      <p>Sneakers, running, formal, sandals, boots, heels &amp; kids' footwear — from brands you trust.</p>
       <div class="hero-cta">
-        <a class="btn btn-primary" href="{% url 'store:product_list' %}">Shop all shoes</a>
-        <a class="btn btn-ghost" href="{% url 'store:product_list' %}?sort=price_asc">Under ₹2,000</a>
+        <a class="btn btn-primary" href="{% url 'store:product_list' %}">Shop all footwear</a>
+        <a class="btn btn-ghost" href="{% url 'store:product_list' %}?sale=1">On sale now</a>
       </div>
       <ul class="hero-perks">
         <li>🚚 Free shipping over ₹1,999</li>
@@ -24,29 +24,52 @@
   </div>
 </section>
 
-<!-- ============ Category cards ============ -->
+<!-- ============ Shop by audience (Men / Women / Kids) ============ -->
 <section class="section container">
   <div class="section-head">
-    <h2>Shop by category</h2>
+    <h2>Shop by audience</h2>
     <a href="{% url 'store:product_list' %}" class="link">View all →</a>
   </div>
 
   <div class="cat-grid">
-    {% for cat in audience_categories %}
-      <a class="cat-card cat-card-audience" href="{% url 'store:product_list' %}?category={{ cat.slug }}">
-        {% if cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">{% else %}
-          <span class="cat-emoji">{% if cat.name == "Men" %}🚹{% elif cat.name == "Women" %}🚺{% else %}🧒{% endif %}</span>
-        {% endif %}
-        <span class="cat-name">{{ cat.name }}</span>
-        <span class="cat-count">Browse →</span>
+    {% for a in audience_cards %}
+      <a class="cat-card cat-card-audience" href="{% url 'store:product_list' %}?audience={{ a.slug }}">
+        <span class="cat-emoji" aria-hidden="true">{{ a.emoji }}</span>
+        <span class="cat-name">{{ a.name }}</span>
+        <span class="cat-count">{{ a.count }} item{{ a.count|pluralize }} →</span>
       </a>
     {% endfor %}
   </div>
+</section>
 
-  <div class="chip-row">
-    {% for cat in type_categories %}
-      <a class="chip" href="{% url 'store:product_list' %}?category={{ cat.slug }}">{{ cat.name }}</a>
-    {% endfor %}
+<!-- ============ Shop by category (every footwear type) ============ -->
+<section class="section section-tint">
+  <div class="container">
+    <div class="section-head">
+      <h2>Shop by category</h2>
+      <a href="{% url 'store:product_list' %}" class="link">View all →</a>
+    </div>
+
+    <div class="cat-grid cat-grid-types">
+      {% for cat in type_categories %}
+        <a class="cat-card" href="{% url 'store:product_list' %}?category={{ cat.slug }}">
+          <span class="cat-emoji" aria-hidden="true">{{ cat.icon|default:"👟" }}</span>
+          <span class="cat-name">{{ cat.name }}</span>
+          <span class="cat-count">{{ cat.product_count }} item{{ cat.product_count|pluralize }} →</span>
+        </a>
+      {% empty %}
+        <p class="empty">No categories yet — run <code>python manage.py seed_store</code>.</p>
+      {% endfor %}
+    </div>
+
+    {# Quick chips for the sub-types (Loafers, Chelsea Boots, Clogs, ...) #}
+    <div class="chip-row">
+      {% for cat in type_categories %}
+        {% for sub in cat.children.all %}
+          <a class="chip" href="{% url 'store:product_list' %}?category={{ sub.slug }}">{{ sub.name }}</a>
+        {% endfor %}
+      {% endfor %}
+    </div>
   </div>
 </section>
 
@@ -71,7 +94,7 @@
   <div class="container">
     <div class="section-head">
       <h2>Deals of the week 🔥</h2>
-      <a href="{% url 'store:product_list' %}?sort=price_asc" class="link">More deals →</a>
+      <a href="{% url 'store:product_list' %}?sale=1" class="link">More deals →</a>
     </div>
     <div class="product-grid">
       {% for product in on_sale %}

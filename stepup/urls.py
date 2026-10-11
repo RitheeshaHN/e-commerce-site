@@ -1,5 +1,5 @@
 """
-Root URL configuration for StepUp Shoes.
+Root URL configuration for StepUp Footwear.
 
 Includes:
   /            store  (home, product list, product detail, search)
@@ -58,6 +58,6 @@ if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Friendly admin site headers.
-admin.site.site_header = "StepUp Shoes Admin"
-admin.site.site_title = "StepUp Admin"
+admin.site.site_header = "StepUp Footwear Admin"
+admin.site.site_title = "StepUp Footwear Admin"
 admin.site.index_title = "Store management"

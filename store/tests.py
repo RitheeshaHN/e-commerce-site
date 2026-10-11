@@ -12,12 +12,14 @@ def make_product(name="Air Zoom Pegasus", price=1000, **kwargs):
     """Tiny factory used across the store tests."""
     stock = kwargs.pop("stock", 5)
     brand, _ = Brand.objects.get_or_create(name=kwargs.pop("brand_name", "Nike"))
-    cat, _ = Category.objects.get_or_create(
-        slug="running", defaults={"name": "Running", "kind": "type"}
-    )
+    category = kwargs.pop("category", None)
+    if category is None:
+        category, _ = Category.objects.get_or_create(
+            slug="running", defaults={"name": "Running"}
+        )
     product = Product.objects.create(
-        name=name, brand=brand, category=cat,
-        description="A great running shoe.",
+        name=name, brand=brand, category=category,
+        description="A great running pair.",
         price=price, **kwargs,
     )
     ProductSize.objects.create(product=product, size="8", stock=stock)
@@ -33,8 +35,32 @@ class ProductListTests(TestCase):
     def test_list_page_renders(self):
         r = self.client.get(reverse("store:product_list"))
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, "All shoes")
+        self.assertContains(r, "All footwear")
         self.assertEqual(r.context["total_results"], 3)
+
+    def test_audience_filter(self):
+        Product.objects.filter(pk=self.p1.pk).update(audience="men")
+        Product.objects.filter(pk=self.p2.pk).update(audience="women")
+        Product.objects.filter(pk=self.p3.pk).update(audience="kids")
+
+        r = self.client.get(reverse("store:product_list"), {"audience": "women"})
+        self.assertEqual(r.context["total_results"], 1)
+        self.assertEqual(r.context["products"][0], self.p2)
+
+    def test_unknown_audience_is_ignored(self):
+        r = self.client.get(reverse("store:product_list"), {"audience": "bots"})
+        self.assertEqual(r.context["total_results"], 3)
+
+    def test_sale_filter_shows_only_discounted(self):
+        # p1 is the only product with a discount_price
+        r = self.client.get(reverse("store:product_list"), {"sale": "1"})
+        self.assertEqual(r.context["total_results"], 1)
+        self.assertEqual(r.context["products"][0], self.p1)
+
+    def test_sale_filter_never_matches_price_equals_discount(self):
+        Product.objects.filter(pk=self.p1.pk).update(discount_price=1000)
+        r = self.client.get(reverse("store:product_list"), {"sale": "1"})
+        self.assertEqual(r.context["total_results"], 0)
 
     def test_search_by_name(self):
         r = self.client.get(reverse("store:product_list"), {"q": "pegasus"})
@@ -101,19 +127,49 @@ class ProductListTests(TestCase):
 
 
 class CategoryFilterTests(TestCase):
-    def test_parent_category_includes_children(self):
-        men = Category.objects.create(name="Men", slug="men", kind="audience")
-        Category.objects.create(
-            name="Running", slug="men-running", kind="type", parent=men
+    def setUp(self):
+        self.boots = Category.objects.create(name="Boots", slug="boots")
+        self.ankle = Category.objects.create(
+            name="Ankle Boots", slug="ankle-boots", parent=self.boots
         )
-        brand, _ = Brand.objects.get_or_create(name="Nike")
-        child = Category.objects.get(slug="men-running")
-        Product.objects.create(
-            name="Child shoe", brand=brand, category=child,
+        self.sandals = Category.objects.create(name="Sandals", slug="sandals")
+        brand, _ = Brand.objects.get_or_create(name="Woodland")
+        self.in_boots = Product.objects.create(
+            name="Gumboots", brand=brand, category=self.boots,
             description="x", price=1000,
         )
-        r = self.client.get(reverse("store:product_list"), {"category": "men"})
+        self.in_ankle = Product.objects.create(
+            name="Ankle Boot", brand=brand, category=self.ankle,
+            description="x", price=1000,
+        )
+        self.sandal = Product.objects.create(
+            name="Fisherman Sandal", brand=brand, category=self.sandals,
+            description="x", price=800,
+        )
+
+    def test_parent_category_includes_descendants(self):
+        # Choosing "Boots" also shows products filed under "Ankle Boots".
+        r = self.client.get(reverse("store:product_list"), {"category": "boots"})
+        self.assertEqual(r.context["total_results"], 2)
+
+    def test_child_category_shows_only_its_own(self):
+        r = self.client.get(reverse("store:product_list"), {"category": "ankle-boots"})
         self.assertEqual(r.context["total_results"], 1)
+        self.assertEqual(r.context["products"][0], self.in_ankle)
+
+    def test_audience_and_category_combine(self):
+        Product.objects.filter(pk=self.in_ankle.pk).update(audience="women")
+        Product.objects.filter(pk=self.in_boots.pk).update(audience="men")
+        r = self.client.get(
+            reverse("store:product_list"),
+            {"category": "boots", "audience": "women"},
+        )
+        self.assertEqual(r.context["total_results"], 1)
+        self.assertEqual(r.context["products"][0], self.in_ankle)
+
+    def test_unknown_category_returns_nothing(self):
+        r = self.client.get(reverse("store:product_list"), {"category": "spaceships"})
+        self.assertEqual(r.context["total_results"], 0)
 
 
 class ProductDetailTests(TestCase):
@@ -131,8 +187,40 @@ class ProductDetailTests(TestCase):
         r = self.client.get(self.product.get_absolute_url())
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, self.product.name)
-        self.assertContains(r, "Foot length (cm)")  # size guide
+        self.assertContains(r, "Foot length (cm)")  # adult size guide
         self.assertContains(r, "Add to cart")
+
+    def test_size_picker_is_an_accessible_dialog(self):
+        r = self.client.get(self.product.get_absolute_url())
+        # The size list lives in a dialog with a visible close button.
+        self.assertContains(r, 'id="sizePicker"')
+        self.assertContains(r, 'role="dialog"')
+        self.assertContains(r, 'aria-modal="true"')
+        self.assertContains(r, 'aria-controls="sizePicker"')
+        self.assertContains(r, 'aria-expanded="false"')
+        self.assertContains(r, 'aria-label="Close size selector"')
+        # The trigger shows the chosen size after picking one.
+        self.assertContains(r, "Select size")
+
+    def test_size_guide_matches_the_size_system(self):
+        # Kids products show the kids chart (UK 1–13 + age), not the adult one.
+        kids = make_product(name="Kids Trainer", audience="kids", size_system="kids")
+        ProductSize.objects.create(product=kids, size="10", stock=4)
+        r = self.client.get(kids.get_absolute_url())
+        self.assertContains(r, "Kids size guide")
+        self.assertContains(r, "Approx. age")
+
+        # S/M/L products (slippers) show the label chart.
+        slippers = make_product(name="Solar Slide", size_system="label")
+        ProductSize.objects.create(product=slippers, size="M", stock=4)
+        r = self.client.get(slippers.get_absolute_url())
+        self.assertContains(r, "Size guide (S / M / L)")
+        self.assertContains(r, ">M<")
+
+    def test_size_prefix_used_in_the_ui(self):
+        kids = make_product(name="Kids Trainer", audience="kids", size_system="kids")
+        r = self.client.get(kids.get_absolute_url())
+        self.assertContains(r, "(Kids)")
 
     def test_out_of_stock_size_disabled(self):
         oos = self.product.sizes.get(size="10")
@@ -196,6 +284,41 @@ class HomePageTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, "Shop by category")
         self.assertContains(r, "Featured picks")
+
+    def test_audience_cards_with_counts(self):
+        make_product(name="Men Pair", audience="men")
+        make_product(name="Women Pair", audience="women", brand_name="Bata")
+        r = self.client.get(reverse("store:home"))
+        self.assertContains(r, "Shop by audience")
+        self.assertContains(r, "1 item")   # one product per audience
+
+    def test_category_cards_count_descendants(self):
+        boots = Category.objects.create(name="Boots", slug="boots")
+        ankle = Category.objects.create(name="Ankle Boots", slug="ankle-boots", parent=boots)
+        make_product(name="Ankle Boot", category=ankle, audience="men")
+        make_product(name="Chelsea Boot", category=ankle, audience="women", brand_name="Clarks")
+        r = self.client.get(reverse("store:home"))
+        # Only the "Boots" card can show 2 — it counts its child's products.
+        self.assertContains(r, "2 items")
+
+
+class NavbarTests(TestCase):
+    def test_mega_menu_lists_all_types_with_sub_types(self):
+        boots = Category.objects.create(name="Boots", slug="boots", icon="🥾")
+        Category.objects.create(name="Chelsea Boots", slug="chelsea-boots", parent=boots)
+        r = self.client.get(reverse("store:home"))
+        self.assertContains(r, 'id="megaMenu"')
+        self.assertContains(r, "Boots")
+        self.assertContains(r, "Chelsea Boots")
+
+    def test_nav_has_new_in_audiences_and_sale(self):
+        r = self.client.get(reverse("store:home"))
+        self.assertContains(r, "?sort=newest")   # New In
+        self.assertContains(r, "?audience=men")
+        self.assertContains(r, "?audience=women")
+        self.assertContains(r, "?audience=kids")
+        self.assertContains(r, "?sale=1")        # Sale
+        self.assertContains(r, "StepUp")         # brand name
 
 
 class SearchSuggestionTests(TestCase):

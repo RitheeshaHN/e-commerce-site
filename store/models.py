@@ -4,8 +4,12 @@ Store app models: Category, Brand, Product, ProductImage, ProductSize, Review.
 Design notes
 ------------
 * Prices are stored in DecimalField (never float) so money maths is exact.
-* Stock lives on ProductSize (one row per UK size) so we can disable an
+* Stock lives on ProductSize (one row per size) so we can disable an
   out-of-stock size on the product page while keeping other sizes selling.
+* Sizing depends on the footwear type: adults use UK/India 5–12, kids use
+  kids-UK 1–13 and slippers/flip-flops use S/M/L. Every product picks its
+  own list of sizes (ProductSize rows) and the matching size guide chart
+  (see ``store.size_guides``).
 * Product has a denormalised ``stock`` property computed from its sizes --
   convenient for list pages and for `select_related`-free quick checks.
 * All foreign keys use `on_delete` deliberately: catalog data is deleted
@@ -17,16 +21,22 @@ from django.db import models
 from django.urls import reverse
 from django.utils.text import slugify
 
+from .size_guides import SIZE_GUIDES
+
 
 class Category(models.Model):
     """
-    Hierarchical category.
+    Hierarchical *footwear type* category (the store covers every kind of
+    footwear, not just shoes).
 
-    ``parent`` supports optional sub-categories:
-      e.g. Men -> Running, Men -> Casual
-    A category with no parent is a top-level one (Men / Women / Kids).
-    ``name`` is NOT unique because "Running" exists once per parent
-    (Men/Running, Women/Running, Kids/Running) -- slugs stay unique.
+    ``parent`` supports optional sub-categories, e.g.
+        Boots -> Ankle Boots / Chelsea Boots / Trekking Boots
+    A category with no parent is a top-level type shown in the navbar
+    mega-menu and on the home page.
+
+    The audience (Men / Women / Kids) is NOT a category -- it lives on
+    ``Product.audience`` so a product has exactly one type + one audience.
+    That keeps filters independent: "?category=boots&audience=women" just works.
     """
 
     name = models.CharField(max_length=100)
@@ -34,12 +44,8 @@ class Category(models.Model):
     parent = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.CASCADE, related_name="children"
     )
-    # 'audience' = Men/Women/Kids, 'type' = Running/Casual/Formal/Sports
-    kind = models.CharField(
-        max_length=20,
-        choices=(("audience", "Audience"), ("type", "Shoe type")),
-        default="type",
-    )
+    # Emoji shown on the category cards / mega-menu (pure decoration).
+    icon = models.CharField(max_length=8, blank=True, help_text="Emoji, e.g. 👟")
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to="categories/", blank=True)
     is_active = models.BooleanField(default=True)
@@ -58,12 +64,28 @@ class Category(models.Model):
 
     @property
     def full_name(self) -> str:
-        """'Men / Running' for breadcrumbs."""
+        """'Boots / Chelsea Boots' for breadcrumbs."""
         return f"{self.parent.name} / {self.name}" if self.parent else self.name
+
+    def descendant_slugs(self) -> list:
+        """
+        This category's slug plus every descendant slug.
+
+        Used by the filter: choosing "Boots" should also surface products
+        filed under "Ankle Boots" / "Trekking Boots".
+        """
+        slugs = [self.slug]
+        stack = [self]
+        while stack:
+            node = stack.pop()
+            for child in node.children.all():
+                slugs.append(child.slug)
+                stack.append(child)
+        return slugs
 
 
 class Brand(models.Model):
-    """Shoe brand (Nike, Adidas, ...)."""
+    """Footwear brand (Nike, Adidas, Bata, ...)."""
 
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=120, unique=True, blank=True)
@@ -98,14 +120,40 @@ class ProductQuerySet(models.QuerySet):
 
 
 class Product(models.Model):
-    """A single shoe product."""
+    """A single footwear product (shoe, sandal, slipper, boot, ...)."""
+
+    # Who the product is for. Driven by the navbar links (Men / Women / Kids).
+    AUDIENCE = (
+        ("men", "Men"),
+        ("women", "Women"),
+        ("kids", "Kids"),
+    )
+
+    # Size systems differ by footwear type:
+    #   adult -> UK/India 3-12 (numeric, incl. halves)
+    #   kids  -> UK kids 1-13 with an age hint in the size guide
+    #   label -> S / M / L for slippers, flip-flops and floaters
+    SIZE_SYSTEMS = (
+        ("adult", "Adult (UK/India 3–12)"),
+        ("kids", "Kids (UK 1–13)"),
+        ("label", "S / M / L"),
+    )
 
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=220, unique=True, blank=True)
     brand = models.ForeignKey(Brand, on_delete=models.PROTECT, related_name="products")
-    # Keep both an audience category (Men) and a type category (Running).
+    # The footwear *type* (Loafers, Ankle Boots, Slippers, ...). One level of
+    # children is supported, so "Boots" also matches "Ankle Boots".
     category = models.ForeignKey(
         Category, on_delete=models.PROTECT, related_name="products"
+    )
+    # Men / Women / Kids -- independent of the category.
+    audience = models.CharField(
+        max_length=10, choices=AUDIENCE, default="men", db_index=True
+    )
+    # Determines which size list and size-guide chart this product shows.
+    size_system = models.CharField(
+        max_length=10, choices=SIZE_SYSTEMS, default="adult"
     )
     description = models.TextField()
     material = models.CharField(max_length=200, blank=True, help_text="e.g. Mesh + Rubber sole")
@@ -197,6 +245,34 @@ class Product(models.Model):
     def colour_list(self) -> list:
         return [c.strip() for c in self.colours.split(",") if c.strip()]
 
+    @property
+    def size_unit(self) -> str:
+        """
+        Name of the size system, used in labels: "Size (UK)" for adults,
+        "Size (Kids)" for kids' UK sizes, plain "Size" for S/M/L products.
+        """
+        return {"adult": "UK", "kids": "Kids", "label": ""}[self.size_system]
+
+    @property
+    def size_prefix(self) -> str:
+        """
+        Label shown in front of a size in the UI.
+
+        Adults -> "UK 9", kids -> "Kids 10", S/M/L products (slippers,
+        flip-flops) -> just "M".
+        """
+        unit = self.size_unit
+        return f"{unit} " if unit else ""
+
+    @property
+    def audience_label(self) -> str:
+        return dict(self.AUDIENCE).get(self.audience, "")
+
+    @property
+    def size_guide(self) -> dict:
+        """The size-guide chart matching this product's size system."""
+        return SIZE_GUIDES[self.size_system]
+
 
 class ProductImage(models.Model):
     """Multiple gallery images per product (first image = primary)."""
@@ -215,15 +291,25 @@ class ProductImage(models.Model):
 
 
 class ProductSize(models.Model):
-    """Stock per UK size for a product (size selector on detail page)."""
+    """
+    Stock per size for a product (the size selector on the detail page).
+
+    ``size`` is a CharField so every sizing system fits in one field:
+      * adults   -> "6", "8.5", "12"  (UK/India)
+      * kids     -> "4", "10", "13"   (kids UK)
+      * label    -> "S", "M", "L"     (slippers / flip-flops)
+    ``sort_order`` lets each product control the display order, so sizes
+    render 5, 6, 7 ... 12 instead of lexicographic "10, 11, 6, 7".
+    """
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="sizes")
-    # UK shoe sizes: 5, 6, 6.5 ... 12  -> store as char to allow 6.5
-    size = models.CharField(max_length=5)
+    size = models.CharField(max_length=12)
     stock = models.PositiveIntegerField(default=0)
+    # Display order within the product (0, 1, 2, ... left to right).
+    sort_order = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
-        ordering = ["size"]
+        ordering = ["sort_order", "id"]
         unique_together = ("product", "size")
         constraints = [
             models.CheckConstraint(
@@ -232,7 +318,7 @@ class ProductSize(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.product.name} UK {self.size} ({self.stock})"
+        return f"{self.product.name} {self.product.size_prefix}{self.size} ({self.stock})"
 
 
 class Review(models.Model):

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Checkout | StepUp Shoes{% endblock %}
+{% block title %}Checkout | StepUp Footwear{% endblock %}
 
 {% block content %}
 <div class="container page">
@@ -94,7 +94,7 @@
         {% for item in items %}
           <li>
             <span class="mini-name">
-              {{ item.product.name }} <small class="muted">UK {{ item.size.size }} × {{ item.quantity }}</small>
+              {{ item.product.name }} <small class="muted">{{ item.product.size_prefix }}{{ item.size.size }} × {{ item.quantity }}</small>
             </span>
             <span>₹{{ item.line_total|floatformat:0 }}</span>
           </li>

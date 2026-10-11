@@ -15,14 +15,14 @@ class ProductSizeInline(admin.TabularInline):
 
     model = ProductSize
     extra = 1
-    fields = ("size", "stock")
-    ordering = ["size"]
+    fields = ("size", "sort_order", "stock")
+    ordering = ["sort_order", "id"]
 
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("name", "kind", "parent", "is_active")
-    list_filter = ("kind", "is_active")
+    list_display = ("name", "parent", "icon", "is_active")
+    list_filter = ("is_active", "parent")
     search_fields = ("name",)
     prepopulated_fields = {"slug": ("name",)}
 
@@ -37,10 +37,13 @@ class BrandAdmin(admin.ModelAdmin):
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
-        "name", "brand", "category", "price", "discount_price",
-        "is_active", "is_featured", "stock_total", "created_at",
+        "name", "brand", "category", "audience", "size_system", "price",
+        "discount_price", "is_active", "is_featured", "stock_total", "created_at",
     )
-    list_filter = ("is_active", "is_featured", "brand", "category", "created_at")
+    list_filter = (
+        "is_active", "is_featured", "audience", "size_system", "brand",
+        "category", "created_at",
+    )
     search_fields = ("name", "brand__name", "description")
     prepopulated_fields = {"slug": ("name",)}
     list_editable = ("is_active", "is_featured", "price", "discount_price")

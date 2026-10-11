@@ -35,7 +35,7 @@ def register(request):
                     request, f"Welcome! {merged} cart item(s) carried over."
                 )
             else:
-                messages.success(request, "Account created. Welcome to StepUp Shoes!")
+                messages.success(request, "Account created. Welcome to StepUp Footwear!")
             return redirect(request.GET.get("next") or "store:home")
     else:
         form = RegisterForm()

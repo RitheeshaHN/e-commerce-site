@@ -117,7 +117,7 @@ class OrderItem(models.Model):
         ordering = ["id"]
 
     def __str__(self) -> str:
-        return f"{self.quantity} × {self.product_name} UK {self.size_label}"
+        return f"{self.quantity} × {self.product_name} {self.size_label}"
 
     @property
     def line_total(self) -> float:

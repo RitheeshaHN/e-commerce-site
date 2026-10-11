@@ -45,6 +45,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /* ---------------- Categories mega-menu ----------------
+     Click toggles the menu (so it works with touch/keyboard too); on
+     desktop pointer devices it also opens on hover. Esc and outside
+     clicks always close it. */
+  const megaItem = document.getElementById('megaItem');
+  const megaTrigger = document.getElementById('megaTrigger');
+  const megaMenu = document.getElementById('megaMenu');
+  if (megaItem && megaTrigger && megaMenu) {
+    const setMega = (open) => {
+      megaMenu.hidden = !open;
+      megaTrigger.setAttribute('aria-expanded', String(open));
+    };
+
+    megaTrigger.addEventListener('click', () => setMega(megaMenu.hidden));
+
+    // Hover open/close only where hovering is meaningful.
+    const pointerDesktop = window.matchMedia('(hover: hover) and (min-width: 960px)');
+    let hoverTimer = null;
+    megaItem.addEventListener('mouseenter', () => {
+      if (pointerDesktop.matches) { clearTimeout(hoverTimer); setMega(true); }
+    });
+    megaItem.addEventListener('mouseleave', () => {
+      if (pointerDesktop.matches) hoverTimer = setTimeout(() => setMega(false), 180);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !megaMenu.hidden) {
+        setMega(false);
+        megaTrigger.focus();
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!megaItem.contains(e.target)) setMega(false);
+    });
+  }
+
   /* ---------------- Toast auto-dismiss ---------------- */
   document.querySelectorAll('[data-toast]').forEach((t) => {
     setTimeout(() => {

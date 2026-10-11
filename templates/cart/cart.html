@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Your Cart | StepUp Shoes{% endblock %}
+{% block title %}Your Cart | StepUp Footwear{% endblock %}
 
 {% block content %}
 <div class="container page">
@@ -26,7 +26,7 @@
             <div class="cart-info">
               <span class="brand">{{ item.product.brand.name }}</span>
               <h3><a href="{{ item.product.get_absolute_url }}">{{ item.product.name }}</a></h3>
-              <p class="muted small">Size: UK {{ item.size.size }}
+              <p class="muted small">Size: {{ item.size.product.size_prefix }}{{ item.size.size }}
                 {% if item.size.stock <= 5 %}<span class="low-stock">(only {{ item.size.stock }} left)</span>{% endif %}
               </p>
               <p class="line-price">₹<span data-line-price>{{ item.line_total|default:0 }}</span></p>
@@ -89,7 +89,7 @@
     <div class="empty-state">
       <span>🛒</span>
       <h2>Your cart is empty</h2>
-      <p>Browse our latest shoes and find your perfect pair.</p>
+      <p>Browse our latest footwear and find your perfect pair.</p>
       <a class="btn btn-primary" href="{% url 'store:product_list' %}">Start shopping</a>
     </div>
   {% endif %}

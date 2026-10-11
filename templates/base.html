@@ -4,8 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="StepUp Shoes - buy running, casual, formal and sports shoes online.">
-  <title>{% block title %}StepUp Shoes{% endblock %}</title>
+  <meta name="description" content="StepUp Footwear — buy sneakers, running, formal, sandals, boots, heels and kids' footwear online.">
+  <title>{% block title %}StepUp Footwear{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
@@ -13,24 +13,52 @@
 <!-- ============ Navbar (mobile-first: burger menu collapses on small screens) ============ -->
 <header class="navbar">
   <div class="container nav-inner">
-    <a href="{% url 'store:home' %}" class="logo">Step<span>Up</span> 👟</a>
+    <a href="{% url 'store:home' %}" class="logo" aria-label="StepUp Footwear — home">
+      Step<span>Up</span><span class="logo-sub"> Footwear</span> 👟
+    </a>
 
-    <button class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
+    <button class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="navLinks">
       <span></span><span></span><span></span>
     </button>
 
-    <nav class="nav-links" id="navLinks">
-      {# Category shortcuts ------------------------------------------------ #}
-      <a href="{% url 'store:product_list' %}">All Shoes</a>
-      <a href="{% url 'store:product_list' %}?category=men">Men</a>
-      <a href="{% url 'store:product_list' %}?category=women">Women</a>
-      <a href="{% url 'store:product_list' %}?category=kids">Kids</a>
+    {# Main navigation: New In / Men / Women / Kids / Categories / Sale #}
+    <nav class="nav-links" id="navLinks" aria-label="Main">
+      <a href="{% url 'store:product_list' %}?sort=newest">New In</a>
+      <a href="{% url 'store:product_list' %}?audience=men">Men</a>
+      <a href="{% url 'store:product_list' %}?audience=women">Women</a>
+      <a href="{% url 'store:product_list' %}?audience=kids">Kids</a>
+
+      {# "Categories" mega-menu: every footwear type, with its sub-types #}
+      <div class="nav-item has-mega" id="megaItem">
+        <button type="button" class="nav-link mega-trigger" id="megaTrigger"
+                aria-expanded="false" aria-controls="megaMenu" aria-haspopup="true">
+          Categories <span class="caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="mega-menu" id="megaMenu" hidden>
+          <div class="mega-grid">
+            {% for cat in mega_categories %}
+              <div class="mega-col">
+                <a class="mega-head" href="{% url 'store:product_list' %}?category={{ cat.slug }}">
+                  {% if cat.icon %}<span aria-hidden="true">{{ cat.icon }}</span>{% endif %}{{ cat.name }}
+                </a>
+                {% for sub in cat.children.all %}
+                  <a href="{% url 'store:product_list' %}?category={{ sub.slug }}">{{ sub.name }}</a>
+                {% endfor %}
+              </div>
+            {% empty %}
+              <p class="muted">No categories yet — run <code>python manage.py seed_store</code>.</p>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <a href="{% url 'store:product_list' %}?sale=1" class="nav-sale">Sale</a>
     </nav>
 
     {# Search box: plain GET form (works without JS), enhanced by JS ------------- #}
     <form class="nav-search" action="{% url 'store:product_list' %}" method="get" role="search">
-      <input type="search" name="q" id="navSearchInput" placeholder="Search shoes…"
-             value="{{ request.GET.q }}" autocomplete="off" aria-label="Search products">
+      <input type="search" name="q" id="navSearchInput" placeholder="Search footwear…"
+             value="{{ request.GET.q }}" autocomplete="off" aria-label="Search footwear">
       <button type="submit" aria-label="Search">🔍</button>
       <div class="search-suggest" id="searchSuggest" hidden></div>
     </form>
@@ -71,14 +99,15 @@
 <footer class="footer">
   <div class="container footer-grid">
     <div>
-      <h4>Step<span>Up</span> Shoes</h4>
-      <p>Every step, elevated. Running, casual, formal &amp; sports footwear for the whole family.</p>
+      <h4>Step<span>Up</span> Footwear</h4>
+      <p>Every step, elevated. Sneakers, formal, sandals, boots, heels &amp; kids' footwear for the whole family.</p>
     </div>
     <div>
       <h5>Shop</h5>
-      <a href="{% url 'store:product_list' %}?category=men">Men</a>
-      <a href="{% url 'store:product_list' %}?category=women">Women</a>
-      <a href="{% url 'store:product_list' %}?category=kids">Kids</a>
+      <a href="{% url 'store:product_list' %}?audience=men">Men</a>
+      <a href="{% url 'store:product_list' %}?audience=women">Women</a>
+      <a href="{% url 'store:product_list' %}?audience=kids">Kids</a>
+      <a href="{% url 'store:product_list' %}?sale=1">Sale</a>
       <a href="{% url 'store:product_list' %}?sort=price_asc">On a budget</a>
     </div>
     <div>
@@ -89,11 +118,11 @@
     </div>
     <div>
       <h5>Contact</h5>
-      <p>support@stepupshoes.example</p>
+      <p>support@stepupfootwear.example</p>
       <p>+91 98765 43210</p>
     </div>
   </div>
-  <div class="footer-bottom">© {% now "Y" %} StepUp Shoes. Built with Django.</div>
+  <div class="footer-bottom">© {% now "Y" %} StepUp Footwear. Built with Django.</div>
 </footer>
 
 {# Global JS: navbar, toasts, search suggestions, cart AJAX ----------------- #}

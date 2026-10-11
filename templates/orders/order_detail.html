@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Order {{ order.order_number }} | StepUp Shoes{% endblock %}
+{% block title %}Order {{ order.order_number }} | StepUp Footwear{% endblock %}
 
 {% block content %}
 <div class="container page">
@@ -22,7 +22,7 @@
     {% elif order.status == "Cancelled" %}
       <p class="muted">This order was cancelled.</p>
     {% else %}
-      <p class="muted small">Need help? Contact support@stepupshoes.example</p>
+      <p class="muted small">Need help? Contact support@stepupfootwear.example</p>
     {% endif %}
   </div>
 
@@ -51,7 +51,7 @@
             </div>
             <div class="order-item-info">
               <strong><a href="{% url 'store:product_detail' item.product_slug %}">{{ item.product_name }}</a></strong>
-              <p class="muted small">UK {{ item.size_label }} · Qty {{ item.quantity }} · ₹{{ item.unit_price|floatformat:0 }} each</p>
+              <p class="muted small">{{ item.size_label }} · Qty {{ item.quantity }} · ₹{{ item.unit_price|floatformat:0 }} each</p>
             </div>
             <span class="order-item-total">₹{{ item.line_total|floatformat:0 }}</span>
           </li>

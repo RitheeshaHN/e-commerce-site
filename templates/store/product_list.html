@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}{% if current_q %}“{{ current_q }}” — {% endif %}Shoes | StepUp{% endblock %}
+{% block title %}{% if current_q %}“{{ current_q }}” — {% endif %}Footwear | StepUp{% endblock %}
 
 {% block content %}
 <div class="container page">
   <div class="breadcrumb">
-    <a href="{% url 'store:home' %}">Home</a> / <span>Shoes</span>
+    <a href="{% url 'store:home' %}">Home</a> /
+    <a href="{% url 'store:product_list' %}">Footwear</a>
+    {% if current_category_name %}/ <span>{{ current_category_name }}</span>
+    {% elif current_audience %}/ <span>{{ current_audience|capfirst }}</span>{% endif %}
   </div>
 
   <div class="list-layout">
@@ -17,19 +20,37 @@
         <input type="hidden" name="sort" value="{{ sort }}">
 
         <div class="filter-group">
+          <h4>Audience</h4>
+          <ul class="filter-list">
+            <li>
+              <label><input type="radio" name="audience" value="" {% if not current_audience %}checked{% endif %}> Everyone</label>
+            </li>
+            {% for value, label in audience_choices %}
+              <li>
+                <label>
+                  <input type="radio" name="audience" value="{{ value }}"
+                         {% if current_audience == value %}checked{% endif %}>
+                  {{ label }}
+                </label>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="filter-group">
           <h4>Category</h4>
           <ul class="filter-list">
             <li>
-              <label><input type="radio" name="category" value="" {% if not current_category %}checked{% endif %}> All</label>
+              <label><input type="radio" name="category" value="" {% if not current_category %}checked{% endif %}> All footwear</label>
             </li>
             {% for cat in categories %}
               <li>
                 <label>
                   <input type="radio" name="category" value="{{ cat.slug }}"
                          {% if current_category == cat.slug %}checked{% endif %}>
-                  {{ cat.name }}
+                  {% if cat.icon %}{{ cat.icon }} {% endif %}{{ cat.name }}
                 </label>
-                {# Sub-categories (Running / Casual / ... under Men, Women, Kids) #}
+                {# Sub-types (Loafers, Chelsea Boots, Clogs, ...) #}
                 {% if cat.children.all %}
                   <ul class="filter-sublist">
                     {% for sub in cat.children.all %}
@@ -64,7 +85,8 @@
         </div>
 
         <div class="filter-group">
-          <h4>Size (UK)</h4>
+          <h4>Size</h4>
+          <p class="muted small">Adults use UK/India numbers, kids UK 1–13 and slippers S/M/L.</p>
           <div class="size-chips">
             {% for s in sizes %}
               <label class="size-chip">
@@ -96,6 +118,18 @@
           </div>
         </div>
 
+        <div class="filter-group">
+          <h4>Deals</h4>
+          <ul class="filter-list">
+            <li>
+              <label>
+                <input type="checkbox" name="sale" value="1" {% if current_sale %}checked{% endif %}>
+                On sale only
+              </label>
+            </li>
+          </ul>
+        </div>
+
         <div class="filter-actions">
           <button class="btn btn-primary btn-block" type="submit">Apply filters</button>
           <a class="btn btn-ghost btn-block" href="{% url 'store:product_list' %}">Clear all</a>
@@ -108,7 +142,10 @@
       <div class="results-head">
         <div>
           <h1>
-            {% if current_q %}Results for “{{ current_q }}”{% else %}All shoes{% endif %}
+            {% if current_q %}Results for “{{ current_q }}”
+            {% elif current_category_name %}{{ current_category_name }}
+            {% elif current_audience %}{{ current_audience|capfirst }} footwear
+            {% else %}All footwear{% endif %}
           </h1>
           <p class="muted">{{ total_results }} product{{ total_results|pluralize }}</p>
         </div>
@@ -121,6 +158,8 @@
           <form method="get" action="{% url 'store:product_list' %}" class="sort-form">
             {% if current_q %}<input type="hidden" name="q" value="{{ current_q }}">{% endif %}
             {% if current_category %}<input type="hidden" name="category" value="{{ current_category }}">{% endif %}
+            {% if current_audience %}<input type="hidden" name="audience" value="{{ current_audience }}">{% endif %}
+            {% if current_sale %}<input type="hidden" name="sale" value="{{ current_sale }}">{% endif %}
             {% for b in selected_brands %}<input type="hidden" name="brand" value="{{ b }}">{% endfor %}
             {% if selected_sizes %}<input type="hidden" name="size" value="{{ selected_sizes }}">{% endif %}
             {% if min_price %}<input type="hidden" name="min_price" value="{{ min_price }}">{% endif %}
@@ -163,7 +202,7 @@
       {% else %}
         <div class="empty-state">
           <span>🕳️</span>
-          <h2>No shoes found</h2>
+          <h2>No footwear found</h2>
           <p>Try removing some filters or searching for something else.</p>
           <a class="btn btn-primary" href="{% url 'store:product_list' %}">Clear filters</a>
         </div>
@@ -192,9 +231,13 @@
     });
   });
 
-  // Selecting any filter auto-submits for a snappy feel
+  // Selecting a radio filter (audience / category / size) auto-submits
   document.querySelectorAll('#filterForm input[type=radio]').forEach(el => {
     el.addEventListener('change', () => document.getElementById('filterForm').submit());
   });
+
+  // "On sale only" checkbox submits immediately too
+  const saleBox = document.querySelector('#filterForm input[name=sale]');
+  if (saleBox) saleBox.addEventListener('change', () => document.getElementById('filterForm').submit());
 </script>
 {% endblock %}

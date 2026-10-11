@@ -1,5 +1,5 @@
 """
-Django settings for the StepUp Shoes e-commerce project.
+Django settings for the StepUp Footwear e-commerce project.
 
 Environment variables (SECRET_KEY, DEBUG, ...) are read from a local
 `.env` file if present, otherwise from the process environment.
@@ -89,6 +89,8 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 # Makes the cart count badge available on every template
                 "cart.context_processors.cart_summary",
+                # Navbar data: mega-menu categories + audience choices
+                "store.context_processors.shop_navigation",
             ],
         },
     },

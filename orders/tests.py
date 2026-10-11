@@ -25,7 +25,7 @@ VALID = {
 def make_sized_product(name="Air Zoom", stock=10, size="8", price=1000):
     brand, _ = Brand.objects.get_or_create(name="Nike")
     cat, _ = Category.objects.get_or_create(
-        slug="running", defaults={"name": "Running", "kind": "type"}
+        slug="running", defaults={"name": "Running"}
     )
     product = Product.objects.create(
         name=name, brand=brand, category=cat,
@@ -83,7 +83,7 @@ class CheckoutTests(BaseOrderTest):
         item = order.items.get()
         self.assertEqual(item.quantity, 3)
         self.assertEqual(item.unit_price, 1000)
-        self.assertEqual(item.size_label, "8")
+        self.assertEqual(item.size_label, "UK 8")
         # snapshot fields captured
         self.assertEqual(item.product_name, str(self.product))
 

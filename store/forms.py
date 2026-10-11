@@ -16,7 +16,7 @@ class ReviewForm(forms.ModelForm):
             ),
             "title": forms.TextInput(attrs={"placeholder": "Summary (optional)", "maxlength": 150}),
             "comment": forms.Textarea(
-                attrs={"rows": 4, "placeholder": "How did the shoes fit and feel?"}
+                attrs={"rows": 4, "placeholder": "How did they fit and feel?"}
             ),
         }
 

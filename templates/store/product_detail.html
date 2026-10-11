@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}{{ product.brand.name }} {{ product.name }} | StepUp Shoes{% endblock %}
+{% block title %}{{ product.brand.name }} {{ product.name }} | StepUp Footwear{% endblock %}
 
 {% block content %}
 <div class="container page">
@@ -79,7 +79,7 @@
         </div>
       {% endif %}
 
-      <!-- ============ Size selector with per-size stock ============ -->
+      <!-- ============ Size selector (opens a dialog / bottom sheet) ============ -->
       <form id="addToCartForm" method="post"
             action="{% url 'cart:cart_add' 0 %}"
             data-cart-add-url="{% url 'cart:cart_add' 999999 %}"
@@ -88,26 +88,23 @@
 
         <div class="option-block">
           <div class="option-head">
-            <h4>Select size (UK)</h4>
-            <button type="button" class="link" id="sizeGuideBtn">📏 Size guide</button>
+            <h4 id="sizeOptionLabel">Size{% if product.size_unit %} ({{ product.size_unit }}){% endif %}</h4>
+            <button type="button" class="link" id="sizeGuideBtn"
+                    aria-haspopup="dialog" aria-expanded="false" aria-controls="sizeGuideModal">
+              📏 Size guide
+            </button>
           </div>
 
-          <div class="size-grid" id="sizeGrid">
-            {% for s in sizes %}
-              <label class="size-opt {% if s.stock == 0 %}disabled{% endif %}"
-                     title="{% if s.stock > 0 %}{{ s.stock }} in stock{% else %}Out of stock{% endif %}">
-                <input type="radio" name="size" value="{{ s.pk }}" data-size="{{ s.size }}"
-                       data-stock="{{ s.stock }}"
-                       {% if s.stock == 0 %}disabled{% endif %}>
-                <span>{{ s.size }}</span>
-                {% if s.stock > 0 and s.stock <= 3 %}
-                  <small>Only {{ s.stock }} left</small>
-                {% endif %}
-              </label>
-            {% empty %}
-              <p class="muted">No sizes available.</p>
-            {% endfor %}
-          </div>
+          {# The size list lives in a dialog (bottom sheet on mobile). #}
+          <button type="button" class="size-trigger" id="sizeTrigger"
+                  aria-haspopup="dialog" aria-expanded="false" aria-controls="sizePicker"
+                  {% if not sizes %}disabled{% endif %}>
+            <span id="sizeTriggerLabel">Select size</span>
+            <span class="size-trigger-caret" aria-hidden="true">▾</span>
+          </button>
+
+          {# The chosen ProductSize pk is written here by JS and read on submit. #}
+          <input type="hidden" name="size" id="sizeValue" value="">
           <p class="field-error" id="sizeError" hidden>Please select a size.</p>
           <p class="muted small" id="stockHint"></p>
         </div>
@@ -220,20 +217,78 @@
   {% endif %}
 </div>
 
-<!-- =================== Size guide modal =================== -->
-<div class="modal" id="sizeModal" hidden>
-  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="sizeModalTitle">
-    <button class="modal-close" id="sizeModalClose" aria-label="Close">×</button>
-    <h3 id="sizeModalTitle">📐 Size guide (foot length)</h3>
-    <p class="muted">Measure your foot from heel to toe and match the length below.</p>
-    <table class="size-table">
-      <thead><tr><th>UK</th><th>EU</th><th>Foot length (cm)</th></tr></thead>
-      <tbody>
-        {% for uk, eu, cm in size_chart %}
-          <tr><td>{{ uk }}</td><td>{{ eu }}</td><td>{{ cm }}</td></tr>
+<!-- =================== Size picker (bottom sheet on mobile / dialog on desktop) =================== -->
+<div class="sheet" id="sizePickerSheet" hidden>
+  <div class="sheet-bd" data-close></div>
+  <div class="sheet-panel" id="sizePicker" role="dialog" aria-modal="true"
+       aria-labelledby="sizePickerTitle" tabindex="-1">
+    <header class="sheet-head">
+      <div>
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <h3 id="sizePickerTitle">Select your size</h3>
+      </div>
+      {# Visible close button (requirement) + Esc + click-outside also close #}
+      <button type="button" class="sheet-close" id="sizePickerClose" aria-label="Close size selector">×</button>
+    </header>
+
+    <div class="sheet-body">
+      <div class="size-grid" id="sizeGrid">
+        {% for s in sizes %}
+          <label class="size-opt {% if s.stock == 0 %}disabled{% endif %}"
+                 title="{% if s.stock > 0 %}{{ s.stock }} in stock{% else %}Out of stock{% endif %}">
+            <input type="radio" name="size_opt" value="{{ s.pk }}"
+                   data-size="{{ s.size }}" data-stock="{{ s.stock }}"
+                   data-label="{{ product.size_prefix }}{{ s.size }}"
+                   {% if s.stock == 0 %}disabled{% endif %}>
+            <span>{{ s.size }}</span>
+            {% if s.stock > 0 and s.stock <= 3 %}
+              <small>Only {{ s.stock }} left</small>
+            {% endif %}
+          </label>
+        {% empty %}
+          <p class="muted">No sizes available for this product yet.</p>
         {% endfor %}
-      </tbody>
-    </table>
+      </div>
+    </div>
+
+    <footer class="sheet-foot">
+      <button type="button" class="btn btn-ghost" id="sizeGuideFromSheet">📏 Size guide</button>
+      {# "Done" is mainly for the mobile bottom sheet, but works everywhere. #}
+      <button type="button" class="btn btn-primary" id="sizePickerDone">Done</button>
+    </footer>
+  </div>
+</div>
+
+<!-- =================== Size guide (same dialog behaviour, per size system) =================== -->
+<div class="sheet" id="sizeGuideSheet" hidden>
+  <div class="sheet-bd" data-close></div>
+  <div class="sheet-panel sheet-panel-sm" id="sizeGuideModal" role="dialog" aria-modal="true"
+       aria-labelledby="sizeGuideTitle" tabindex="-1">
+    <header class="sheet-head">
+      <div>
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <h3 id="sizeGuideTitle">📐 {{ size_guide.title }}</h3>
+      </div>
+      <button type="button" class="sheet-close" id="sizeGuideClose" aria-label="Close size guide">×</button>
+    </header>
+
+    <div class="sheet-body">
+      <p class="muted">{{ size_guide.note }}</p>
+      <table class="size-table">
+        <thead>
+          <tr>{% for col in size_guide.columns %}<th>{{ col }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+          {% for row in size_guide.rows %}
+            <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <footer class="sheet-foot sheet-foot-end">
+      <button type="button" class="btn btn-primary" id="sizeGuideDone">Done</button>
+    </footer>
   </div>
 </div>
 {% endblock %}
@@ -259,34 +314,126 @@
     });
   });
 
-  // ---------- Size selection: stock hint + validation ----------
+  /* =====================================================================
+     Accessible dialog helper (used by the size picker and the size guide)
+
+     Both dialogs support:
+       • a visible ✕ close button
+       • Esc to close
+       • clicking outside (the backdrop) to close
+       • focus moved into the dialog on open and restored on close
+       • a simple Tab focus trap
+       • aria-haspopup / aria-expanded on the trigger, role="dialog" + aria-modal
+     Below 640px the same markup is styled as a bottom sheet with a
+     "Done" button (see static/css/style.css).
+     ===================================================================== */
+  function setupDialog(sheetId, triggerIds) {
+    const sheet = document.getElementById(sheetId);
+    const panel = sheet.querySelector('[role="dialog"]');
+    const triggers = triggerIds.map(id => document.getElementById(id)).filter(Boolean);
+    let lastFocus = null;
+
+    const focusables = () =>
+      [...panel.querySelectorAll('button, [href], input:not([type=hidden]), select, textarea')]
+        .filter(el => !el.disabled && el.offsetParent !== null);
+
+    function open() {
+      if (!sheet.hidden) return;
+      lastFocus = document.activeElement;
+      sheet.hidden = false;
+      triggers.forEach(t => t.setAttribute('aria-expanded', 'true'));
+      document.documentElement.classList.add('no-scroll');
+      // Focus the dialog itself so screen readers announce its title.
+      panel.focus();
+    }
+
+    function close() {
+      if (sheet.hidden) return;
+      sheet.hidden = true;
+      triggers.forEach(t => t.setAttribute('aria-expanded', 'false'));
+      document.documentElement.classList.remove('no-scroll');
+      // Put focus back where it came from; if that element is gone or hidden
+      // (e.g. focus was on <body>), fall back to the trigger button.
+      const visible = lastFocus && document.contains(lastFocus)
+        && lastFocus.offsetParent !== null;
+      (visible ? lastFocus : triggers[0] || null)?.focus?.();
+    }
+
+    triggers.forEach(t => t.addEventListener('click', open));
+    sheet.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', close));
+
+    // Esc closes; Tab is trapped inside the dialog.
+    document.addEventListener('keydown', (e) => {
+      if (sheet.hidden) return;
+      if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+      if (e.key !== 'Tab') return;
+      const list = focusables();
+      if (!list.length) return;
+      const first = list[0], last = list[list.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+
+    return { open, close, isOpen: () => !sheet.hidden };
+  }
+
+  const sizeTrigger = document.getElementById('sizeTrigger');
+  const sizeDialog = setupDialog('sizePickerSheet', ['sizeTrigger']);
+  const guideDialog = setupDialog('sizeGuideSheet', ['sizeGuideBtn']);
+
+  document.getElementById('sizePickerClose').addEventListener('click', sizeDialog.close);
+  document.getElementById('sizePickerDone').addEventListener('click', sizeDialog.close);
+  document.getElementById('sizeGuideClose').addEventListener('click', guideDialog.close);
+  document.getElementById('sizeGuideDone').addEventListener('click', guideDialog.close);
+
+  // "Size guide" opened from inside the size sheet: close one, open the other
+  // (so we never stack two dialogs on top of each other).
+  document.getElementById('sizeGuideFromSheet').addEventListener('click', () => {
+    sizeDialog.close();
+    guideDialog.open();
+  });
+
+  // ---------- Size selection ----------
+  // Picking a size auto-closes the list and writes the label onto the trigger.
+  const sizeValue = document.getElementById('sizeValue');
+  const sizeTriggerLabel = document.getElementById('sizeTriggerLabel');
   const sizeError = document.getElementById('sizeError');
   const stockHint = document.getElementById('stockHint');
-  const addBtn    = document.getElementById('addToCartBtn');
+  const addBtn = document.getElementById('addToCartBtn');
 
-  document.querySelectorAll('#sizeGrid input[name=size]').forEach(r => {
-    r.addEventListener('change', () => {
-      sizeError.hidden = true;
-      const stock = parseInt(r.dataset.stock, 10);
-      stockHint.textContent = `UK ${r.dataset.size} selected — ${stock} in stock`;
-      qtyInput.max = Math.min(10, stock);
-      if (parseInt(qtyInput.value, 10) > stock) qtyInput.value = stock;
-      addBtn.disabled = false;
-    });
+  document.getElementById('sizeGrid').addEventListener('change', (e) => {
+    const r = e.target;
+    if (!r.matches('input[name=size_opt]')) return;
+
+    const label = r.dataset.label;                       // "UK 9" / "Kids 10" / "M"
+    const stock = parseInt(r.dataset.stock, 10) || 0;
+
+    sizeValue.value = r.value;                            // ProductSize pk for the AJAX call
+    sizeTriggerLabel.textContent = label;
+    sizeTrigger.classList.add('is-selected');
+    sizeError.hidden = true;
+    stockHint.textContent = `${label} selected — ${stock} in stock`;
+
+    // Never let the quantity exceed what's left in stock.
+    qtyInput.max = Math.min(10, Math.max(1, stock));
+    if (parseInt(qtyInput.value, 10) > stock) qtyInput.value = qtyInput.max;
+
+    sizeDialog.close();                                  // close automatically after choosing
   });
 
   // ---------- Add to cart (AJAX, no page reload) ----------
   const form = document.getElementById('addToCartForm');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const selected = form.querySelector('input[name=size]:checked');
-    if (!selected) {
+    if (!sizeValue.value) {
+      // No size yet → shake the button and open the size list.
       sizeError.hidden = false;
-      document.getElementById('sizeGrid').classList.add('shake');
-      setTimeout(() => document.getElementById('sizeGrid').classList.remove('shake'), 400);
+      sizeTrigger.classList.add('shake');
+      setTimeout(() => sizeTrigger.classList.remove('shake'), 400);
+      sizeDialog.open();
       return;
     }
-    const url = `/cart/add/${selected.value}/`;
+    const url = `/cart/add/${sizeValue.value}/`;
     addBtn.disabled = true;
     addBtn.textContent = 'Adding…';
     try {
@@ -315,11 +462,5 @@
       addBtn.textContent = 'Add to cart 🛒';
     }
   });
-
-  // ---------- Size guide modal ----------
-  const modal = document.getElementById('sizeModal');
-  document.getElementById('sizeGuideBtn').addEventListener('click', () => modal.hidden = false);
-  document.getElementById('sizeModalClose').addEventListener('click', () => modal.hidden = true);
-  modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
 </script>
 {% endblock %}

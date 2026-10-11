@@ -114,7 +114,10 @@ def checkout(request):
                     size=size,
                     product_name=str(product),
                     product_slug=product.slug,
-                    size_label=size.size,
+                    # Snapshot the full human label ("UK 8" / "Kids 10" / "M")
+                    # so order history still reads correctly if the product
+                    # later changes size system.
+                    size_label=f"{product.size_prefix}{size.size}".strip(),
                     unit_price=product.final_price,
                     quantity=line["quantity"],
                 )

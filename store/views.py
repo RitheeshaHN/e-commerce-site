@@ -4,8 +4,7 @@ product detail (gallery, sizes, reviews, related), and review posting.
 """
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, Q, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Case, Count, DecimalField, F, OrderBy, Q, When
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -19,8 +18,8 @@ def _filtered_products(request):
     """
     Build the queryset shared by the product list page.
 
-    Reads GET params: q, category, brand, min_price, max_price, size, sort.
-    Returns (queryset, active_filter_labels).
+    Reads GET params: q, category, audience, brand, min_price, max_price,
+    size, sale, sort. Returns (queryset, sort).
     """
     qs = Product.objects.active().select_related("brand", "category").prefetch_related(
         "images", "sizes"
@@ -35,18 +34,27 @@ def _filtered_products(request):
             description__icontains=q
         )
 
-    # ---- category filter (slug; matches the category or its parent) ----
+    # ---- category filter (slug; matches the category or a descendant) --
+    # Choosing "Boots" must also surface products filed under
+    # "Ankle Boots" / "Trekking Boots".
     category_slug = request.GET.get("category", "").strip()
     if category_slug:
         cat = Category.objects.filter(slug=category_slug).first()
         if cat:
-            slugs = [cat.slug]
-            # Include children so "Men" also shows "Men / Running".
-            slugs += [c.slug for c in cat.children.all()]
-            # Include the parent so "Running" also shows "Men / Running".
-            if cat.parent:
-                slugs.append(cat.parent.slug)
-            filters &= Q(category__slug__in=slugs)
+            filters &= Q(category__slug__in=cat.descendant_slugs())
+        else:
+            # Unknown slug (typo / stale link) -> show the empty state
+            # instead of silently ignoring the filter.
+            filters &= Q(pk__in=[])
+
+    # ---- audience filter (men / women / kids, from the navbar) ----------
+    audience = request.GET.get("audience", "").strip()
+    if audience in dict(Product.AUDIENCE):
+        filters &= Q(audience=audience)
+
+    # ---- sale filter (?sale=1 shows only discounted products) -----------
+    if request.GET.get("sale") in ("1", "true", "yes"):
+        filters &= Q(discount_price__isnull=False) & Q(discount_price__lt=F("price"))
 
     # ---- brand filter (supports multiple: ?brand=nike&brand=adidas) ----
     brands = request.GET.getlist("brand")
@@ -94,8 +102,6 @@ def _filtered_products(request):
 
     # For price sorting, sort by the *effective* price (discount if set).
     if sort in ("price_asc", "price_desc"):
-        from django.db.models import F, Case, DecimalField, OrderBy, When
-
         effective = Case(
             When(discount_price__isnull=False, then=F("discount_price")),
             default=F("price"),
@@ -110,10 +116,21 @@ def _filtered_products(request):
 
 def _filter_context(request):
     """Values needed to re-render the filter sidebar with current state."""
+    current_category = request.GET.get("category", "")
+    current_cat_obj = (
+        Category.objects.filter(slug=current_category).first() if current_category else None
+    )
     return {
-        "categories": Category.objects.filter(is_active=True, parent__isnull=True),
+        # Top-level footwear types (Boots, Sandals, ...) with their children
+        # for the sidebar tree and the navbar mega-menu.
+        "categories": Category.objects.filter(
+            is_active=True, parent__isnull=True
+        ).prefetch_related("children"),
         "brands": Brand.objects.all(),
-        # Common UK sizes present in the catalog.
+        # Audience choices come from the model so the sidebar can never drift
+        # from the navbar links.
+        "audience_choices": Product.AUDIENCE,
+        # Every distinct size present in the catalog (adult numbers + S/M/L).
         "sizes": (
             Product.objects.active()
             .values_list("sizes__size", flat=True)
@@ -122,7 +139,11 @@ def _filter_context(request):
         ),
         "selected_brands": set(request.GET.getlist("brand")),
         "selected_sizes": request.GET.get("size", ""),
-        "current_category": request.GET.get("category", ""),
+        "current_category": current_category,
+        # Human label for the results heading ("Boots / Chelsea Boots").
+        "current_category_name": current_cat_obj.full_name if current_cat_obj else "",
+        "current_audience": request.GET.get("audience", ""),
+        "current_sale": request.GET.get("sale", ""),
         "current_q": request.GET.get("q", ""),
         "min_price": request.GET.get("min_price", ""),
         "max_price": request.GET.get("max_price", ""),
@@ -131,8 +152,51 @@ def _filter_context(request):
 
 
 # ------------------------------------------------------------------ views ---
+# Emoji used for the Men / Women / Kids cards on the home page.
+AUDIENCE_EMOJI = {"men": "🚹", "women": "🚺", "kids": "🧒"}
+
+
+def _type_category_counts():
+    """
+    Active top-level footwear types, each annotated with
+
+    * ``product_count`` -- active products in the type *and* its children
+    * ``children``      -- already fetched (no N+1 in the navbar/menu)
+
+    Two queries total: one for the whole tree, one for per-category counts.
+    """
+    cats = list(Category.objects.filter(is_active=True).order_by("name"))
+    children: dict = {}
+    for c in cats:
+        children.setdefault(c.parent_id, []).append(c)
+
+    per_cat = dict(
+        Product.objects.active()
+        .values("category_id")
+        .annotate(n=Count("pk"))
+        .values_list("category_id", "n")
+    )
+
+    memo: dict = {}
+
+    def count_of(node):
+        """Products in this category plus every descendant."""
+        if node.pk not in memo:
+            memo[node.pk] = per_cat.get(node.pk, 0) + sum(
+                count_of(c) for c in children.get(node.pk, [])
+            )
+        return memo[node.pk]
+
+    for cat in cats:
+        # Plain attribute (not a model field) -- safe, not persisted.
+        cat.product_count = count_of(cat)
+    return children.get(None, [])
+
+
 def home(request):
-    """Home page: hero, category cards, featured + newest shoes."""
+    """
+    Home page: hero, audience + category cards, featured, deals and new in.
+    """
     featured = (
         Product.objects.featured()
         .select_related("brand", "category")
@@ -148,19 +212,29 @@ def home(request):
         .select_related("brand", "category")
         .prefetch_related("images", "sizes")[:4]
     )
-    audience_cats = Category.objects.filter(kind="audience", is_active=True)
-    # Only top-level types for the chip row: "Running/Casual/Formal/Sports"
-    # once each (sub-categories like Men/Casual repeat the same name).
-    type_cats = Category.objects.filter(
-        kind="type", is_active=True, parent__isnull=True
+
+    per_audience = dict(
+        Product.objects.active()
+        .values("audience")
+        .annotate(n=Count("pk"))
+        .values_list("audience", "n")
     )
+    audience_cards = [
+        {
+            "slug": slug,
+            "name": name,
+            "emoji": AUDIENCE_EMOJI[slug],
+            "count": per_audience.get(slug, 0),
+        }
+        for slug, name in Product.AUDIENCE
+    ]
 
     context = {
         "featured": featured,
         "newest": newest,
         "on_sale": on_sale,
-        "audience_categories": audience_cats,
-        "type_categories": type_cats,
+        "audience_cards": audience_cards,
+        "type_categories": _type_category_counts(),
     }
     return render(request, "store/home.html", context)
 
@@ -249,23 +323,11 @@ def product_detail(request, slug):
             request.user.is_authenticated
             and product.reviews.filter(user=request.user).exists()
         ),
-        # UK size -> foot length (cm) chart used by the size guide modal.
-        "size_chart": SIZE_CHART,
+        # Size-guide chart matching the product's size system
+        # (adult UK/India, kids UK, or S/M/L) -- see store/size_guides.py.
+        "size_guide": product.size_guide,
     }
     return render(request, "store/product_detail.html", context)
-
-
-# UK size guide: (UK size, EU size, foot length in cm)
-SIZE_CHART = [
-    ("5", "38", "24.1"),
-    ("6", "39", "24.9"),
-    ("7", "41", "25.7"),
-    ("8", "42", "26.5"),
-    ("9", "43", "27.3"),
-    ("10", "44", "28.1"),
-    ("11", "45", "29.0"),
-    ("12", "46", "29.8"),
-]
 
 
 @require_POST

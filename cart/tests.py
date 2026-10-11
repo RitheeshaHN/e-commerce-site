@@ -13,7 +13,7 @@ from .models import Cart, CartItem
 def make_sized_product(name="Air Zoom", stock=10, size="8", price=1000):
     brand, _ = Brand.objects.get_or_create(name="Nike")
     cat, _ = Category.objects.get_or_create(
-        slug="running", defaults={"name": "Running", "kind": "type"}
+        slug="running", defaults={"name": "Running"}
     )
     product = Product.objects.create(
         name=name, brand=brand, category=cat,
@@ -236,3 +236,31 @@ class CartMergeTests(TestCase):
              {"quantity": 4})
         r = self.client.get(reverse("store:home"))
         self.assertEqual(r.context["cart_count"], 4)
+
+
+class SizeSystemLabelTests(TestCase):
+    """The cart shows the right prefix for each size system."""
+
+    def _add_and_open_cart(self, product_size):
+        ajax(self.client, reverse("cart:cart_add", args=[product_size.pk]),
+             {"quantity": 1})
+        return self.client.get(reverse("cart:cart_detail"))
+
+    def test_adult_size_shows_uk_prefix(self):
+        product, size = make_sized_product(name="Adult Pair", size="8")
+        Product.objects.filter(pk=product.pk).update(size_system="adult")
+        r = self._add_and_open_cart(size)
+        self.assertContains(r, "Size: UK 8")
+
+    def test_kids_size_shows_kids_prefix(self):
+        product, size = make_sized_product(name="Kids Pair", size="10")
+        Product.objects.filter(pk=product.pk).update(size_system="kids")
+        r = self._add_and_open_cart(size)
+        self.assertContains(r, "Size: Kids 10")
+
+    def test_slipper_size_shows_no_prefix(self):
+        product, size = make_sized_product(name="Slide Slipper", size="M")
+        Product.objects.filter(pk=product.pk).update(size_system="label")
+        r = self._add_and_open_cart(size)
+        self.assertContains(r, "Size: M")
+        self.assertNotContains(r, "UK M")
